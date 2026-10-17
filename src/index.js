@@ -1,4 +1,5 @@
 import * as native from '@deepseek-ai/dsh-llm';
+import Schema from '@deepseek-ai/schemastery';
 import { AccountStore } from './siwc/accounts.js';
 import { OpenAIProtocol } from './siwc/protocol.js';
 import { SessionManager } from './siwc/sessions.js';
@@ -14,6 +15,6 @@ const plugin = createHostPlugin(
     const protocol = new OpenAIProtocol();
     return { accounts, protocol, sessions: new SessionManager({ accounts, protocol }) };
   },
-  { verifyCandidate: validateRunningCandidate },
+  { verifyCandidate: validateRunningCandidate, Schema },
 );
-export const { name, inject, apply } = plugin;
+export const { name, inject, Config, apply } = plugin;

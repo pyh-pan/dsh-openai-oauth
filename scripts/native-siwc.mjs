@@ -13,12 +13,16 @@ import { PROVIDER, API_PATH } from '../src/siwc/controller.js';
 import { ISSUER, DIRECT_SCOPE, RESOURCE } from '../src/siwc/protocol.js';
 import { sessionAffinity } from '../src/siwc/wire.js';
 import { verifyProfileCompatibility } from './native-profile-compatibility.mjs';
+import { verifyNativeRequestPolicy } from './native-request-policy.mjs';
 
 const asar = process.env.DSH_ASAR;
 if (!asar) throw new Error('Set DSH_ASAR');
 const profileCompatibility = await verifyProfileCompatibility(asar);
 const req = createRequire(pathToFileURL(join(asar, 'package.json')));
 const { Context } = req('@deepseek-ai/cordis');
+const schemaModule = req('@deepseek-ai/schemastery');
+const Schema = schemaModule.default ?? schemaModule;
+const nativeRequestPolicySchema = verifyNativeRequestPolicy(Schema);
 const load = (p) => import(pathToFileURL(join(asar, 'dsh/node_modules', p, 'lib/index.js')).href);
 const [{ default: Credentials }, native, connection] = await Promise.all([
   load('@deepseek-ai/dsh-credentials-local'),
@@ -119,6 +123,7 @@ try {
       // This IS the isolated native check. It uses only the temporary store and
       // controlled fetch above; do not recursively spawn another copy of itself.
       verifyCandidate: async () => {},
+      Schema,
     },
   );
   const fiber = await ctx.plugin(plugin);
@@ -128,6 +133,8 @@ try {
     ['deepseek-account', 'deepseek-official', 'existing-api-source', PROVIDER],
   );
   assert.deepEqual(await ctx.llm.listModels(PROVIDER), []);
+  assert.equal(ctx.llm.providerRetryPolicy(PROVIDER).mode, 'normal');
+  assert.equal(ctx.llm.providerRetryPolicy(PROVIDER).maxRetries, 5);
   const key = await accounts.beginRegistration('oaiapp_native_fixture_123456');
   await accounts.saveValidated({
     clientId: 'oaiapp_native_fixture_123456',
@@ -250,6 +257,8 @@ try {
     JSON.stringify({
       ...profileCompatibility,
       nativeServices: true,
+      nativeRequestPolicySchema,
+      hostOwnedBoundedRetryPolicy: true,
       sourceRegisteredAndUnloaded: true,
       existingSourcesPreserved: true,
       modelDirectory: true,

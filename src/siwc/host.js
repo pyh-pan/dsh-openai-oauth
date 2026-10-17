@@ -2,6 +2,7 @@ import { createAdapterClass } from './adapter.js';
 import { API_PATH, PROVIDER, SiwcController, createSiwcHandler } from './controller.js';
 import { OWNER, SELECTION_KEY } from './accounts.js';
 import { assertHostContract, nativeContractIssues } from '../compatibility.js';
+import { createPluginConfig, normalizePluginConfig } from './request-policy.js';
 
 const starting = () => new Response('DSH_PLUGIN_STARTING', { status: 503 });
 
@@ -51,14 +52,16 @@ async function assertOwnerBoundary(connection, isClosed) {
 }
 
 // Runtime factories must return protected host-side services, not UI data.
-export function createHostPlugin(native, createRuntime, { verifyCandidate } = {}) {
+export function createHostPlugin(native, createRuntime, { verifyCandidate, Schema } = {}) {
   const issues = nativeContractIssues(native);
   if (issues.length) throw new Error(`DSH_HOST_CONTRACT_MISSING:${issues.join(',')}`);
   const Adapter = createAdapterClass(native);
   return {
     name: 'chatgpt-subscription-login',
     inject: ['connection', 'credentials', 'llm'],
-    async apply(ctx) {
+    ...(Schema ? { Config: createPluginConfig(Schema) } : {}),
+    async apply(ctx, config) {
+      const { requestPolicy } = normalizePluginConfig(config);
       const compatibility = assertHostContract(native, ctx);
       let closed = false;
       let runtime, adapter, controller, handler;
@@ -95,7 +98,7 @@ export function createHostPlugin(native, createRuntime, { verifyCandidate } = {}
           `DSH_COMPATIBILITY_CANDIDATE:${compatibility.version}:local synthetic checks passed; not a validated release`,
         );
       runtime = createRuntime(ctx);
-      adapter = new Adapter(runtime);
+      adapter = new Adapter({ ...runtime, requestPolicy, logger: ctx.logger });
       const handle = ctx.llm.registerAdapter([PROVIDER], adapter);
       if (typeof handle?.replace !== 'function')
         throw new Error('DSH_ADAPTER_HANDLE_CONTRACT_CHANGED');
