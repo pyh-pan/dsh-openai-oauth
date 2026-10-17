@@ -34,6 +34,8 @@ Affinity remains stable across rotating tokens, adapter recreation and selection
 
 The key field in the supplied controlled experiments was `session_id`; the other two align the full metadata behavior. These experiments do not expose the server's internal routing algorithm. Cache hits can occasionally occur without explicit affinity, and affinity does not guarantee a fixed hit percentage: cold starts, new content, compaction, expiry and eviction still matter. Assess fresh request usage, not a historical cumulative percentage. Usage accounting and tool namespace are unchanged; no cache-retention parameter is added.
 
+Version 0.3.1 was also checked inside an actual Windows/x64 DSH Desktop 0.2.1-rc.1 Host using its existing SIWC grant, not another client's OAuth. A fixed synthetic tool loop made exactly four Responses calls on `gpt-6.1-sol` / `high`: cold 0/6503 cached input tokens, then warm 6400/6534 (97.95%), 6400/6565 (97.49%) and 6400/6596 (97.03%). Outbound metadata consistency and raw usage were observed without exporting credentials or private history; native replay and namespace were retained. This is a bounded synthetic desktop-Host check, not a promise about every real conversation or a macOS live-cache validation.
+
 ## Models and Responses
 
 `GET https://api.openai.com/v1/models` supplies the real account catalog. Only `visibility=list` entries are offered, in server order, retaining slugs. Catalog JSON has a separate 8 MiB limit because rich model metadata can exceed the smaller OAuth/discovery bound.
