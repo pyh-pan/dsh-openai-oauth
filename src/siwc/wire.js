@@ -108,6 +108,21 @@ export function replayOutput(output) {
   });
 }
 
+// Scope durable session affinity to the selected account, not its rotating tokens
+// or selection generation. Standalone calls must not share an invented global ID.
+export function sessionAffinity(sessionId, accountKey) {
+  if (sessionId === undefined) return undefined;
+  if (
+    typeof sessionId !== 'string' ||
+    !sessionId.trim() ||
+    sessionId.length > 16384 ||
+    typeof accountKey !== 'string' ||
+    !accountKey
+  )
+    reject('INVALID_SESSION_CONTEXT');
+  return `dsh_${digest(JSON.stringify([accountKey, sessionId]))}`;
+}
+
 export function responsesBody(options, { accountKey, reasoningSummary = false }) {
   if (options.stop !== undefined) reject('UNSUPPORTED_OPTION');
   // The SIWC preview explicitly forbids these otherwise-standard API fields.
@@ -199,6 +214,9 @@ export function responsesBody(options, { accountKey, reasoningSummary = false })
     input,
     store: false,
     stream: true,
+    ...(options.sessionId !== undefined
+      ? { prompt_cache_key: sessionAffinity(options.sessionId, accountKey) }
+      : {}),
     include: ['reasoning.encrypted_content'],
     ...(options.system !== undefined ? { instructions: options.system } : {}),
     ...(tools?.length

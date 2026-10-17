@@ -26,6 +26,14 @@ Refresh reads the newest rotating token inside the native cross-process lock, pe
 
 Sign-out attempts official revocation with bounded retries and then clears local tokens. Failure returns `REMOTE_REVOCATION_UNCONFIRMED`; local deletion alone is never reported as remote revocation. Other clients' grants are not touched.
 
+## Stable session affinity
+
+DSH supplies a durable `sessionId` to its native Llm call. For a valid session, this adapter derives `dsh_` plus SHA-256/base64url of `JSON.stringify([accountKey, sessionId])`. The Responses `prompt_cache_key`, `session_id` header and `x-client-request-id` header use that same value. Raw account keys and session paths are not transmitted as affinity identifiers.
+
+Affinity remains stable across rotating tokens, adapter recreation and selection-generation changes, while accounts and main/child sessions stay isolated. Standalone calls that omit `sessionId` omit all three fields rather than sharing a global key. Catalog and OAuth requests do not acquire these fields.
+
+The key field in the supplied controlled experiments was `session_id`; the other two align the full metadata behavior. These experiments do not expose the server's internal routing algorithm. Cache hits can occasionally occur without explicit affinity, and affinity does not guarantee a fixed hit percentage: cold starts, new content, compaction, expiry and eviction still matter. Assess fresh request usage, not a historical cumulative percentage. Usage accounting and tool namespace are unchanged; no cache-retention parameter is added.
+
 ## Models and Responses
 
 `GET https://api.openai.com/v1/models` supplies the real account catalog. Only `visibility=list` entries are offered, in server order, retaining slugs. Catalog JSON has a separate 8 MiB limit because rich model metadata can exceed the smaller OAuth/discovery bound.

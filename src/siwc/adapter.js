@@ -1,6 +1,12 @@
 import { RESOURCE, SiwcError, boundedJson, reject, safeCode } from './protocol.js';
 import { PROVIDER } from './controller.js';
-import { ResponseStream, providerFailure, responsesBody, sseEvents } from './wire.js';
+import {
+  ResponseStream,
+  providerFailure,
+  responsesBody,
+  sessionAffinity,
+  sseEvents,
+} from './wire.js';
 import { reasoningCapabilities } from './capabilities.js';
 
 const same = (a, b) => a?.key === b?.key && a?.generation === b?.generation;
@@ -79,7 +85,7 @@ export function createAdapterClass({ LlmAdapter, LlmError, attributionHeaders })
       if (expected && !same(selected, expected)) reject('ACCOUNT_CHANGED', 409);
       return selected;
     }
-    async #request(path, { selection, signal, body, stream = false }) {
+    async #request(path, { selection, signal, body, stream = false, affinity }) {
       if (this.#closed.signal.aborted) reject('PLUGIN_DISPOSED');
       await this.#selected(selection);
       const access = await this.#sessions.access(selection.key, { signal, selection });
@@ -102,6 +108,10 @@ export function createAdapterClass({ LlmAdapter, LlmError, attributionHeaders })
             authorization: `Bearer ${access.accessToken}`,
             accept: stream ? 'text/event-stream' : 'application/json',
             ...(body ? { 'content-type': 'application/json' } : {}),
+            // Keep inference affinity stable without attaching session metadata to catalog calls.
+            ...(path === 'responses' && affinity
+              ? { session_id: affinity, 'x-client-request-id': affinity }
+              : {}),
           },
           ...(body ? { body: JSON.stringify(body) } : {}),
           redirect: 'error',
@@ -246,11 +256,13 @@ export function createAdapterClass({ LlmAdapter, LlmError, attributionHeaders })
           accountKey: selection.key,
           reasoningSummary: capability?.reasoningSummary === true,
         });
+        const affinity = sessionAffinity(options.sessionId, selection.key);
         request = await this.#request('responses', {
           selection,
           signal: options.signal,
           body,
           stream: true,
+          affinity,
         });
         // `stream:true` determines the wire protocol, not a proxy's MIME label.
         // Decode strictly as SSE regardless of generic transport content-type;

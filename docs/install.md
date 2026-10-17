@@ -51,7 +51,7 @@ Quit the current desktop normally only after tasks finish; reopen the same insta
 
 ```sh
 npm run pack
-npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.0.tgz
+npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.1.tgz
 ```
 
 Install only reviewed commits/archives. A source checkout is linked; keep it at a stable location. Normal package removal preserves grants. See README and migration.md.

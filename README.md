@@ -15,6 +15,7 @@ Independent community plugin; not affiliated with OpenAI or DeepSeek. This is **
 - Public Responses streaming, local function tools, tool results, and compatible history replay.
 - Multiple saved account/workspace registrations, explicit account selection, rotating refresh, and scoped sign-out.
 - Keeps DeepSeek Account, API-key providers, other sources, and existing sessions independent. No silent billing fallback.
+- Stable account/session-scoped Responses affinity for cache reuse, without sending raw session identifiers.
 - No Codex CLI, API key, patched ASAR, or replacement pi-ai installation.
 
 ## Compatibility
@@ -53,7 +54,7 @@ Only restart DSH after running tasks have finished. A window close may hide the 
 
 ```sh
 npm run pack
-npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.0.tgz
+npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.1.tgz
 ```
 
 Do not keep the old private bundle and this bundle enabled simultaneously: they deliberately preserve the same provider/credential identity. See [migration](docs/migration.md).

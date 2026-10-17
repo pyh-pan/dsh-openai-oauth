@@ -15,6 +15,7 @@
 - 公开 Responses 流式输出、本地 function 工具、工具结果与兼容历史重放。
 - 多账号/工作区注册隔离、显式选择账号、轮换刷新和限定退出。
 - 不覆盖 DeepSeek 账号/API 余额通道、其他源或现有会话，不静默切换计费源。
+- 透传按账号/持久会话派生的 Responses 缓存亲和标识，不明文发送原始会话身份。
 - 不依赖 Codex CLI、API Key，不修改 ASAR 或整体升级内置 pi-ai。
 
 ## 支持范围
@@ -51,7 +52,7 @@ npm run dsh -- plugin --profile desktop add -w .
 
 ```sh
 npm run pack
-npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.0.tgz
+npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.1.tgz
 ```
 
 不要同时启用原私有 bundle 和本项目：为保留既有授权，二者刻意使用同一 provider/凭据身份。切换步骤见 [迁移](docs/migration.md)。

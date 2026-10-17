@@ -11,6 +11,7 @@ import { SessionManager } from '../src/siwc/sessions.js';
 import { createHostPlugin } from '../src/siwc/host.js';
 import { PROVIDER, API_PATH } from '../src/siwc/controller.js';
 import { ISSUER, DIRECT_SCOPE, RESOURCE } from '../src/siwc/protocol.js';
+import { sessionAffinity } from '../src/siwc/wire.js';
 
 const asar = process.env.DSH_ASAR;
 if (!asar) throw new Error('Set DSH_ASAR');
@@ -181,12 +182,22 @@ try {
   for await (const chunk of ctx.llm.stream({
     provider: PROVIDER,
     model: models[0].id,
+    sessionId: 'native-fixture-durable-session',
     messages: [
       { id: 'user-fixture', role: 'user', content: [{ type: 'text', text: 'fixture only' }] },
     ],
   }))
     chunks.push(chunk);
   assert.equal(chunks.at(-1).reason.kind, 'stop');
+  const responseRequest = requests.find((request) => request.url.endsWith('/responses'));
+  const affinity = sessionAffinity('native-fixture-durable-session', key);
+  assert.equal(responseRequest.headers.session_id, affinity);
+  assert.equal(responseRequest.headers['x-client-request-id'], affinity);
+  assert.equal(JSON.parse(responseRequest.body).prompt_cache_key, affinity);
+  for (const request of requests.filter((request) => request.url.endsWith('/models'))) {
+    assert.equal(request.headers.session_id, undefined);
+    assert.equal(request.headers['x-client-request-id'], undefined);
+  }
   assert.deepEqual(JSON.parse(requests.find((r) => r.url.endsWith('/responses')).body).reasoning, {
     effort: 'high',
     summary: 'auto',
@@ -231,6 +242,7 @@ try {
       modelDirectory: true,
       attributedMockResponses: true,
       nativeChunkAssembly: true,
+      nativeSessionAffinityPropagated: true,
       authenticatedCarrierApi: true,
       nonOwnerApiDenied: connectionVersion === '0.2.1-rc.1',
       callbackCancellation: true,
