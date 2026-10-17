@@ -1,0 +1,22 @@
+name: Bug report
+description: Report reproducible behavior without credentials or private data.
+body:
+  - type: markdown
+    attributes:
+      value: 'Do not post tokens, callback URLs, credential files, account IDs, internal endpoints or raw logs. Security vulnerabilities: read SECURITY.md first.'
+  - type: input
+    id: versions
+    attributes:
+      label: Plugin / DSH / OS / architecture versions
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Sanitized reproduction, expected and actual result
+    validations:
+      required: true
+  - type: input
+    id: code
+    attributes:
+      label: Safe error code (not a raw response)

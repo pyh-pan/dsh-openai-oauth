@@ -1,0 +1,16 @@
+node_modules/
+coverage/
+artifacts/
+research/
+.pi/
+.dsh/
+.env
+.env.*
+!.env.example
+*.tgz
+*.log
+*.pem
+*.key
+**/.credentials*
+.DS_Store
+Thumbs.db

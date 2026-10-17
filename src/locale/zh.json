@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "ChatGPT 订阅源",
+    "description": "为桌面版添加 ChatGPT OAuth 登录入口，保留已有源与模型选择。"
+  }
+}

@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security reporting
+    url: https://github.com/pyh-pan/dsh-openai-oauth/blob/main/SECURITY.md
+    about: Do not disclose credentials or vulnerabilities in public bug reports.

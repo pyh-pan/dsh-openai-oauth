@@ -1,0 +1,4 @@
+# Only insert our own entry. Never override llm-pi-ai's complete config.
+- insert:
+    - id: chatgpt-subscription-login
+      name: '@pyh-pan/dsh-openai-oauth'

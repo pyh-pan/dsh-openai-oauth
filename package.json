@@ -1,0 +1,84 @@
+{
+  "name": "@pyh-pan/dsh-openai-oauth",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Independent Sign in with ChatGPT subscription provider for DeepSeek Harness Desktop.",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./client": "./src/client.js",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./src/locale/*.json"
+  },
+  "files": [
+    "src/",
+    "scripts/",
+    "test/",
+    "cordis.patch.yml",
+    "README.md",
+    "README.zh.md",
+    "LICENSE",
+    "SECURITY.md",
+    "THIRD_PARTY_NOTICES.md",
+    "CONTRIBUTING.md",
+    "AGENTS.md",
+    "docs/"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "check": "node scripts/check.mjs && node scripts/audit.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test:package": "node scripts/package-check.mjs",
+    "pack": "node scripts/archive.mjs",
+    "test:native": "node scripts/native.mjs",
+    "test:race": "node scripts/native.mjs --race",
+    "doctor": "node scripts/doctor.mjs",
+    "dsh": "node scripts/dsh.mjs"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pyh-pan/dsh-openai-oauth.git"
+  },
+  "homepage": "https://github.com/pyh-pan/dsh-openai-oauth#readme",
+  "bugs": {
+    "url": "https://github.com/pyh-pan/dsh-openai-oauth/issues"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "chatgpt",
+    "siwc",
+    "oauth"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@deepseek-ai/dsh-llm": "0.2.0-rc.2"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-llm": {
+      "optional": true
+    }
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-settings-models",
+        "@deepseek-ai/dsh-client-ui-model-selection",
+        "@deepseek-ai/dsh-client-locale"
+      ]
+    }
+  },
+  "devDependencies": {
+    "prettier": "3.6.2"
+  }
+}

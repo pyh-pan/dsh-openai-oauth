@@ -1,0 +1,41 @@
+# Protocol and lifecycle
+
+The source of truth is OpenAI's current official SIWC documentation:
+
+- [OSS token sharing](https://developers.openai.com/siwc/token-sharing-open-source)
+- [Registration/sign-in](https://developers.openai.com/siwc/token-sharing-open-source/sign-in)
+- [Profiles/sessions](https://developers.openai.com/siwc/token-sharing-open-source/profiles-and-sessions)
+- [Models/inference](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference)
+- [Preview limitations](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations)
+- [Errors/recovery](https://developers.openai.com/siwc/token-sharing-open-source/errors-and-recovery)
+- [UI guidelines](https://developers.openai.com/siwc/ui-ux-guidelines)
+
+## Authentication
+
+First registration uses `dynamic_agent_client`, the actual stable name hint **DSH ChatGPT Source**, and a persistent per-installation host UUID URI. Each callback-issued client ID is stored and reused for that registration. Registration identity and package/repository branding are separate: upgrades do not silently create another Agent.
+
+State, nonce and PKCE S256 are fresh per attempt. Loopback uses 127.0.0.1, with one exact callback URI per attempt; occupied preferred ports fall back to an available loopback port. Wrong state does not consume the attempt; valid callbacks are single-use, bounded and cancelable.
+
+Official discovery/JWKS restrict issuer/endpoints and RS256. Signature, audience/azp, time, nonce and subject are checked before saving identity. Direct subscription scope is validated from the actual Token grant, not callback text. Identity without direct permission remains disabled for inference.
+
+## Storage and sessions
+
+The Host credentials namespace remains `chatgpt-subscription-login`. Account records use issued-client hashes and bind verified subjects; registrations are not mixed across accounts/workspaces. Host ID survives restarts. Selecting an account changes an explicit generation, not the current conversation's provider.
+
+Refresh reads the newest rotating token inside the native cross-process lock, performs bounded network work and atomically commits it. Caller cancellation does not discard an already-started successful rotation. Terminal refresh failures clear tokens but retain registration; temporary errors retain the grant.
+
+Sign-out attempts official revocation with bounded retries and then clears local tokens. Failure returns `REMOTE_REVOCATION_UNCONFIRMED`; local deletion alone is never reported as remote revocation. Other clients' grants are not touched.
+
+## Models and Responses
+
+`GET https://api.openai.com/v1/models` supplies the real account catalog. Only `visibility=list` entries are offered, in server order, retaining slugs. Catalog JSON has a separate 8 MiB limit because rich model metadata can exceed the smaller OAuth/discovery bound.
+
+Actual reasoning choices/defaults map into native Llm capability metadata; unsupported explicit choices fail. Summary is requested only when advertised supported. Input is currently text-only.
+
+Inference uses public `POST /v1/responses`, `store:false`, `stream:true`; tools use the `dsh` namespace. No backend-api, fixed legacy Codex client, partner secret or billing fallback.
+
+SSE is decoded strictly, independent of a generic/missing MIME label. Only successful `response.completed` finishes a turn. When its stateless aggregate is empty, reconstruction requires every contiguous output item to have an explicit done event; partial deltas are never treated as completion. Failed/incomplete/truncated/oversized streams fail closed.
+
+Tool arguments/results and native encrypted reasoning/message phase can be replayed only for the same account/model and unedited durable contents. Cross-source or edited history degrades to safe visible text/tool history.
+
+Preview-incompatible `maxTokens` and `temperature` are rejected, not silently dropped. Attachment upload, hosted MCP and tool-search are not implemented.
