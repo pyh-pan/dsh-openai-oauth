@@ -2,7 +2,7 @@
 
 This is the independent SIWC project at https://github.com/pyh-pan/dsh-openai-oauth, not the older similarly named Codex plugin.
 
-1. Confirm the user wants a local Windows/macOS **Desktop 0.2.0-rc.2** installation. Do not silently default to web/headless.
+1. Confirm the user wants a local Windows/macOS **Desktop 0.2.1-rc.1 or 0.2.0-rc.2** installation. Do not silently default to web/headless.
 2. Read README and docs/install.md. Use Node 24+, `npm ci`, `npm test`, `npm run check`, `npm run test:package`, then `npm run doctor`.
 3. Inspect existing bundles without printing full config or credentials. If an older private bundle already owns this source, follow docs/migration.md; never activate both owners concurrently.
 4. Install through the native plugin manager/CLI: `npm run dsh -- plugin --profile desktop add -w .`. Do not manually rewrite profile package/lock/patch files or modify ASAR/framework dependencies.

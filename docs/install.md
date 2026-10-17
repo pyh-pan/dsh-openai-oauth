@@ -1,6 +1,6 @@
 # Installation
 
-Use a local DSH Desktop **0.2.0-rc.2**, Node.js 24+, npm and Git. There are no production npm dependencies other than the installed Host peer. The package is source ESM and requires no prepare/build scripts.
+Use a local DSH Desktop **0.2.1-rc.1 or 0.2.0-rc.2**, Node.js 24+, npm and Git. There are no production npm dependencies other than the installed Host peer. The package is source ESM and requires no prepare/build scripts.
 
 ## Discovery
 

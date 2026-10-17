@@ -19,14 +19,14 @@ Independent community plugin; not affiliated with OpenAI or DeepSeek. This is **
 
 ## Compatibility
 
-Requires **DSH Desktop 0.2.0-rc.2** and Node.js **24+** for development/install helpers.
+Requires **DSH Desktop 0.2.1-rc.1 or 0.2.0-rc.2** and Node.js **24+** for development/install helpers.
 
-| Environment                                     | Status                                                                             |
-| ----------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Windows Desktop 0.2.0-rc.2                      | SIWC baseline previously exercised; public-package migration verification pending  |
-| macOS Desktop 0.2.0-rc.2                        | Portability work and real desktop validation in progress; not yet claimed verified |
-| Windows/macOS/Linux Node CI                     | Protocol/package tests only; not proof of desktop login or inference               |
-| Older DSH, remote/headless Hosts, Linux Desktop | Not currently claimed supported                                                    |
+| Environment                                      | Status                                                                                         |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| Windows Desktop 0.2.1-rc.1 (0.2.0-rc.2 baseline) | Native suites pass; migrated desktop source/account/selection confirmed                        |
+| macOS Desktop 0.2.1-rc.1                         | Updated native and real desktop validation pending; 0.2.0-rc.2 native suites previously passed |
+| Windows/macOS/Linux Node CI                      | Protocol/package tests only; not proof of desktop login or inference                           |
+| Older DSH, remote/headless Hosts, Linux Desktop  | Not currently claimed supported                                                                |
 
 See [compatibility and verification](docs/compatibility.md). Do not bypass version checks or upgrade bundled framework dependencies to force compatibility.
 

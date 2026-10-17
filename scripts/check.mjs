@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { SUPPORTED_DSH_VERSIONS } from './host.mjs';
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const files = [];
 function walk(dir) {
@@ -20,6 +21,6 @@ for (const file of files) {
   }
 }
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
-if (pkg.peerDependencies?.['@deepseek-ai/dsh-llm'] !== '0.2.0-rc.2')
+if (pkg.peerDependencies?.['@deepseek-ai/dsh-llm'] !== SUPPORTED_DSH_VERSIONS.join(' || '))
   throw Error('Revalidate the supported Host version before changing its peer constraint');
 console.log(`Syntax checked: ${files.length} JavaScript modules`);

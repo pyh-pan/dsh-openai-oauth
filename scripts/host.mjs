@@ -4,7 +4,8 @@ import { dirname, join, win32, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
-export const SUPPORTED_DSH = '0.2.0-rc.2';
+export const SUPPORTED_DSH_VERSIONS = ['0.2.0-rc.2', '0.2.1-rc.1'];
+export const SUPPORTED_DSH = SUPPORTED_DSH_VERSIONS.at(-1);
 const scripts = dirname(fileURLToPath(import.meta.url));
 const fail = (code) => {
   throw new Error(code);
@@ -84,7 +85,7 @@ export function hostEnvironment(host, env = process.env) {
   return result;
 }
 
-export function inspectHost(host, { spawn = spawnSync } = {}) {
+export function readHostInfo(host, { spawn = spawnSync } = {}) {
   const result = spawn(host.executable, ['--expose-internals', join(scripts, 'host-info.mjs')], {
     env: hostEnvironment(host),
     encoding: 'utf8',
@@ -100,13 +101,21 @@ export function inspectHost(host, { spawn = spawnSync } = {}) {
   }
   if (info.platform !== host.platform || !info.cliAvailable)
     fail('DESKTOP_HOST_LAYOUT_UNSUPPORTED');
-  if (
-    info.desktopVersion !== SUPPORTED_DSH ||
-    info.llmVersion !== SUPPORTED_DSH ||
-    info.credentialsVersion !== SUPPORTED_DSH ||
-    info.connectionVersion !== SUPPORTED_DSH
-  )
-    fail('UNSUPPORTED_DSH_VERSION');
+  return info;
+}
+
+export function isSupportedHost(info) {
+  return (
+    SUPPORTED_DSH_VERSIONS.includes(info.desktopVersion) &&
+    [info.llmVersion, info.credentialsVersion, info.connectionVersion].every(
+      (version) => version === info.desktopVersion,
+    )
+  );
+}
+
+export function inspectHost(host, options) {
+  const info = readHostInfo(host, options);
+  if (!isSupportedHost(info)) fail('UNSUPPORTED_DSH_VERSION');
   return info;
 }
 

@@ -1,7 +1,7 @@
 // Native isolation: installed ASAR services + v0.2 host composition. This NEVER
 // reads the user's credential store or calls an upstream inference endpoint.
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -139,10 +139,26 @@ try {
             }
           : {},
       ),
+      { id: 'native-fixture-owner', principal: { kind: 'owner' } },
     );
     assert.equal(response.status, 200);
     return response.json();
   };
+  const connectionVersion = JSON.parse(
+    await readFile(
+      join(asar, 'dsh/node_modules/@deepseek-ai/dsh-client-connection/package.json'),
+      'utf8',
+    ),
+  ).version;
+  if (connectionVersion === '0.2.1-rc.1') {
+    const denied = await ctx.connection
+      .createSharedFetchHandler('/api')
+      .fetch(new Request(`http://localhost${API_PATH}`), {
+        id: 'native-fixture-non-owner',
+        principal: { kind: 'guest' },
+      });
+    assert.equal(denied.status, 403);
+  }
   await accounts.select(key); // Exercise the protected persistence boundary directly.
   const selected = await call({ action: 'select', key });
   assert.equal(selected.selection.key, key);
@@ -216,6 +232,7 @@ try {
       attributedMockResponses: true,
       nativeChunkAssembly: true,
       authenticatedCarrierApi: true,
+      nonOwnerApiDenied: connectionVersion === '0.2.1-rc.1',
       callbackCancellation: true,
       nativeStoreRestart: true,
       scopedRevocationWithMockUpstream: true,
