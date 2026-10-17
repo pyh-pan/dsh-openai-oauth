@@ -600,6 +600,16 @@ window.__ModuleLoader__.load({
     return {
       inject: ['slots', 'locale'],
       apply(ctx) {
+        for (const [service, methods] of [
+          ['slots', ['inject', 'register']],
+          ['locale', ['register', 'bind']],
+        ])
+          for (const method of methods)
+            if (typeof ctx[service]?.[method] !== 'function')
+              throw new Error(`DSH_CLIENT_CONTRACT_MISSING:${service}.${method}`);
+        for (const method of ['effect', 'inject'])
+          if (typeof ctx[method] !== 'function')
+            throw new Error(`DSH_CLIENT_CONTRACT_MISSING:context.${method}`);
         ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'chatgpt-subscription: locale');
         ctx.slots.inject('settings.models.footer', () =>
           ctx.slots.register(
@@ -613,6 +623,8 @@ window.__ModuleLoader__.load({
           ),
         );
         ctx.inject(['modelDirectories'], (scope) => {
+          if (typeof scope.modelDirectories?.directoryFor !== 'function')
+            throw new Error('DSH_CLIENT_CONTRACT_MISSING:modelDirectories.directoryFor');
           scope.slots.inject('conversation.composer.dock', () =>
             scope.slots.register(
               {

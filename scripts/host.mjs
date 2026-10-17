@@ -4,7 +4,9 @@ import { dirname, join, win32, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
-export const SUPPORTED_DSH_VERSIONS = ['0.2.0-rc.2', '0.2.1-rc.1'];
+import { VALIDATED_DSH_VERSIONS, assessHost } from '../src/compatibility.js';
+export { DSH_COMPATIBILITY_RANGE, assessHost } from '../src/compatibility.js';
+export const SUPPORTED_DSH_VERSIONS = VALIDATED_DSH_VERSIONS;
 export const SUPPORTED_DSH = SUPPORTED_DSH_VERSIONS.at(-1);
 const scripts = dirname(fileURLToPath(import.meta.url));
 const fail = (code) => {
@@ -82,6 +84,10 @@ export function hostEnvironment(host, env = process.env) {
   // A parent's debugging/profiling flags must not turn a helper into an inspector.
   delete result.NODE_OPTIONS;
   delete result.ELECTRON_ENABLE_LOGGING;
+  // Root synthetic checks always allocate their own temporary store. Only
+  // their owned race workers may set these controls explicitly.
+  delete result.DSH_RACE_WORKER;
+  delete result.DSH_RACE_DIR;
   return result;
 }
 
@@ -105,22 +111,47 @@ export function readHostInfo(host, { spawn = spawnSync } = {}) {
 }
 
 export function isSupportedHost(info) {
-  return (
-    SUPPORTED_DSH_VERSIONS.includes(info.desktopVersion) &&
-    [info.llmVersion, info.credentialsVersion, info.connectionVersion].every(
-      (version) => version === info.desktopVersion,
-    )
-  );
+  return assessHost(info).status !== 'unsupported';
 }
 
 export function inspectHost(host, options) {
   const info = readHostInfo(host, options);
-  if (!isSupportedHost(info)) fail('UNSUPPORTED_DSH_VERSION');
+  const assessment = assessHost(info);
+  if (assessment.reason) fail(assessment.reason);
   return info;
 }
 
+export function runCandidateChecks(host, { spawn = spawnSync } = {}) {
+  // No real profiles, credentials or upstreams: both scripts use disposable
+  // stores. This is shared by installation and direct Desktop-update startup.
+  for (const script of ['native-siwc.mjs', 'native-session-race.mjs']) {
+    const checked = spawn(host.executable, ['--expose-internals', join(scripts, script)], {
+      env: hostEnvironment(host),
+      stdio: 'inherit',
+      shell: false,
+      timeout: 90000,
+    });
+    if (checked.status !== 0) fail('DSH_CANDIDATE_NATIVE_CHECK_FAILED');
+  }
+}
+
+function isNativeRemoval(args) {
+  if (args[0] !== 'plugin') return false;
+  let index = 1;
+  while (index < args.length) {
+    if (args[index] === '--profile' && args[index + 1]) index += 2;
+    else if (args[index].startsWith('--profile=')) index++;
+    else break;
+  }
+  return args[index] === 'remove';
+}
+
 export function invokeCli(host, args, { spawn = spawnSync } = {}) {
-  inspectHost(host, { spawn });
+  const info = inspectHost(host, { spawn });
+  // A failed candidate must still be removable through the native manager.
+  // Never infer a command from an arbitrary argument/package named "remove".
+  if (assessHost(info).status === 'candidate' && !isNativeRemoval(args))
+    runCandidateChecks(host, { spawn });
   const result = spawn(host.executable, ['--expose-internals', host.cli, ...args], {
     env: hostEnvironment(host),
     stdio: 'inherit',

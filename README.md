@@ -20,16 +20,19 @@ Independent community plugin; not affiliated with OpenAI or DeepSeek. This is **
 
 ## Compatibility
 
-Requires **DSH Desktop 0.2.1-rc.1 or 0.2.0-rc.2** and Node.js **24+** for development/install helpers.
+Validated Desktop releases: **0.2.1-rc.2, 0.2.1-rc.1 and 0.2.0-rc.2**. Development/install helpers require Node.js **24+**.
+
+Forward-eligible range: `0.2.0-rc.2 || >=0.2.1-rc.1 <0.3.0-0`. Later 0.2.x releases are **candidates, not validated releases**: installation and direct-update startup require isolated native checks before real-account activation. Next-minor prereleases/final, mixed components and failed contracts are rejected. See [forward compatibility](docs/forward-compatibility.md).
 
 | Environment                                      | Status                                                                                         |
 | ------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| Windows Desktop 0.2.1-rc.1 (0.2.0-rc.2 baseline) | Native suites pass; migrated desktop source/account/selection confirmed                        |
-| macOS Desktop 0.2.1-rc.1                         | Updated native and real desktop validation pending; 0.2.0-rc.2 native suites previously passed |
+| Windows Desktop 0.2.1-rc.2                       | Native suites pass; initial UI recovery confirmed; hardened-startup recheck pending            |
+| Windows Desktop 0.2.1-rc.1 (0.2.0-rc.2 baseline) | Previously validated native suites and desktop source/account/selection                        |
+| macOS Desktop 0.2.1-rc.2 / 0.2.1-rc.1            | Native and real desktop validation pending for these releases; 0.2.0-rc.2 native suites passed |
 | Windows/macOS/Linux Node CI                      | Protocol/package tests only; not proof of desktop login or inference                           |
 | Older DSH, remote/headless Hosts, Linux Desktop  | Not currently claimed supported                                                                |
 
-See [compatibility and verification](docs/compatibility.md). Do not bypass version checks or upgrade bundled framework dependencies to force compatibility.
+See [compatibility and verification](docs/compatibility.md). Do not bypass compatibility contracts or upgrade bundled framework dependencies to force compatibility.
 
 ## Install from source
 
@@ -54,7 +57,7 @@ Only restart DSH after running tasks have finished. A window close may hide the 
 
 ```sh
 npm run pack
-npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.1.tgz
+npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.2.tgz
 ```
 
 Do not keep the old private bundle and this bundle enabled simultaneously: they deliberately preserve the same provider/credential identity. See [migration](docs/migration.md).
@@ -96,6 +99,8 @@ Pure tests use generated identities and mock upstreams. Native tests use an inst
 Source is published directly as ESM; no generated `lib/` or vendor snapshot is necessary. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Update / remove
+
+If both the source and authorization settings disappear after a DSH upgrade, check [version compatibility troubleshooting](docs/install.md#missing-source-and-authorization-settings-after-a-dsh-upgrade) before signing in again. An incompatible bundle is skipped before its code runs.
 
 For a linked checkout, review/pull changes, run checks, then restart DSH safely. For an archive, install the reviewed replacement using the native plugin command. To remove:
 

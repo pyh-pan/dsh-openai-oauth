@@ -12,9 +12,11 @@ import { createHostPlugin } from '../src/siwc/host.js';
 import { PROVIDER, API_PATH } from '../src/siwc/controller.js';
 import { ISSUER, DIRECT_SCOPE, RESOURCE } from '../src/siwc/protocol.js';
 import { sessionAffinity } from '../src/siwc/wire.js';
+import { verifyProfileCompatibility } from './native-profile-compatibility.mjs';
 
 const asar = process.env.DSH_ASAR;
 if (!asar) throw new Error('Set DSH_ASAR');
+const profileCompatibility = await verifyProfileCompatibility(asar);
 const req = createRequire(pathToFileURL(join(asar, 'package.json')));
 const { Context } = req('@deepseek-ai/cordis');
 const load = (p) => import(pathToFileURL(join(asar, 'dsh/node_modules', p, 'lib/index.js')).href);
@@ -59,59 +61,68 @@ try {
     kind: 'grant',
     payload: { testSentinel: 'untouched' },
   }));
-  const plugin = createHostPlugin(native, (context) => {
-    accounts = new AccountStore(context.credentials);
-    const protocol = {
-      revoke: async (grant) => {
-        assert.equal(grant.refreshToken, 'native-test-refresh');
-      },
-    };
-    return {
-      accounts,
-      protocol,
-      controllerOptions: { port: 0 },
-      sessions: new SessionManager({ accounts, protocol }),
-      fetchImpl: async (url, options) => {
-        requests.push({ url, ...options });
-        if (url === `${RESOURCE}/models`)
-          return Response.json({
-            models: [
-              {
-                slug: 'native-test-model',
-                display_name: 'Native fixture',
-                visibility: 'list',
-                supported_reasoning_levels: [{ effort: 'low' }, { effort: 'high' }],
-                default_reasoning_level: 'high',
-                supports_reasoning_summary_parameter: true,
-              },
-            ],
+  const plugin = createHostPlugin(
+    native,
+    (context) => {
+      accounts = new AccountStore(context.credentials);
+      const protocol = {
+        revoke: async (grant) => {
+          assert.equal(grant.refreshToken, 'native-test-refresh');
+        },
+      };
+      return {
+        accounts,
+        protocol,
+        controllerOptions: { port: 0 },
+        sessions: new SessionManager({ accounts, protocol }),
+        fetchImpl: async (url, options) => {
+          requests.push({ url, ...options });
+          if (url === `${RESOURCE}/models`)
+            return Response.json({
+              models: [
+                {
+                  slug: 'native-test-model',
+                  display_name: 'Native fixture',
+                  visibility: 'list',
+                  supported_reasoning_levels: [{ effort: 'low' }, { effort: 'high' }],
+                  default_reasoning_level: 'high',
+                  supports_reasoning_summary_parameter: true,
+                },
+              ],
+            });
+          assert.equal(url, `${RESOURCE}/responses`);
+          assert.ok(options.headers['user-agent'], 'Real attributionHeaders must reach the wire');
+          const output = [
+            {
+              type: 'message',
+              id: 'msg_native',
+              role: 'assistant',
+              content: [{ type: 'output_text', text: 'native-fixture-ok', annotations: [] }],
+            },
+          ];
+          const data = {
+            type: 'response.completed',
+            response: {
+              id: 'resp_native',
+              status: 'completed',
+              output,
+              usage: { input_tokens: 2, output_tokens: 3 },
+            },
+          };
+          return new Response(`data: ${JSON.stringify(data)}\n\n`, {
+            headers: { 'content-type': 'text/event-stream' },
           });
-        assert.equal(url, `${RESOURCE}/responses`);
-        assert.ok(options.headers['user-agent'], 'Real attributionHeaders must reach the wire');
-        const output = [
-          {
-            type: 'message',
-            id: 'msg_native',
-            role: 'assistant',
-            content: [{ type: 'output_text', text: 'native-fixture-ok', annotations: [] }],
-          },
-        ];
-        const data = {
-          type: 'response.completed',
-          response: {
-            id: 'resp_native',
-            status: 'completed',
-            output,
-            usage: { input_tokens: 2, output_tokens: 3 },
-          },
-        };
-        return new Response(`data: ${JSON.stringify(data)}\n\n`, {
-          headers: { 'content-type': 'text/event-stream' },
-        });
-      },
-    };
-  });
+        },
+      };
+    },
+    {
+      // This IS the isolated native check. It uses only the temporary store and
+      // controlled fetch above; do not recursively spawn another copy of itself.
+      verifyCandidate: async () => {},
+    },
+  );
   const fiber = await ctx.plugin(plugin);
+  await settle(() => ctx.llm.listProviders().some((provider) => provider.id === PROVIDER));
   assert.deepEqual(
     ctx.llm.listProviders().map((provider) => provider.id),
     ['deepseek-account', 'deepseek-official', 'existing-api-source', PROVIDER],
@@ -151,7 +162,8 @@ try {
       'utf8',
     ),
   ).version;
-  if (connectionVersion === '0.2.1-rc.1') {
+  const ownerAwareCarrier = connectionVersion !== '0.2.0-rc.2';
+  if (ownerAwareCarrier) {
     const denied = await ctx.connection
       .createSharedFetchHandler('/api')
       .fetch(new Request(`http://localhost${API_PATH}`), {
@@ -218,7 +230,7 @@ try {
   await fiber.dispose();
   await credentialFiber.restart();
   const restarted = await ctx.plugin(plugin);
-  await settle(() => ctx.connection?.fetchRoutes?.has(API_PATH));
+  await settle(() => ctx.llm.listProviders().some((provider) => provider.id === PROVIDER));
   assert.equal((await call()).accounts[0].signedIn, true);
   assert.equal((await ctx.llm.listModels(PROVIDER))[0].id, 'native-test-model');
   const signedOut = await call({ action: 'logout', key });
@@ -236,6 +248,7 @@ try {
   assert.equal(requests.filter((request) => request.url.endsWith('/responses')).length, 1);
   console.log(
     JSON.stringify({
+      ...profileCompatibility,
       nativeServices: true,
       sourceRegisteredAndUnloaded: true,
       existingSourcesPreserved: true,
@@ -244,7 +257,7 @@ try {
       nativeChunkAssembly: true,
       nativeSessionAffinityPropagated: true,
       authenticatedCarrierApi: true,
-      nonOwnerApiDenied: connectionVersion === '0.2.1-rc.1',
+      nonOwnerApiDenied: ownerAwareCarrier,
       callbackCancellation: true,
       nativeStoreRestart: true,
       scopedRevocationWithMockUpstream: true,

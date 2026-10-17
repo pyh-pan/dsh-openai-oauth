@@ -9,7 +9,7 @@ npm run check
 npm run test:package
 ```
 
-With a local compatible DSH installation, run `npm run doctor`, `npm run test:native`, and `npm run test:race`. These native suites use temporary credential files and controlled upstreams only.
+With a local compatible DSH installation, run `npm run doctor`, `npm run test:native`, and `npm run test:race`. These native suites use temporary credential files and controlled upstreams only. On Desktop 0.2.1-rc.2 and future candidates, `test:native` also exercises the installed boot compatibility policy with disposable profile/package fixtures: the legacy bundle is skipped, the current bundle contributes its entry without exemptions, and an existing layer remains intact. It never edits the user's profile.
 
 ## Structure
 
@@ -20,7 +20,7 @@ With a local compatible DSH installation, run `npm run doctor`, `npm run test:na
 - `scripts/`: portable discovery, native invocation, syntax/package checks.
 - `docs/`: public installation, migration, protocol and verification contracts.
 
-Source is directly distributable ESM; no build or committed vendor tree is needed. Do not broaden the Host peer range without real integration evidence.
+Source is directly distributable ESM; no build or committed vendor tree is needed. Keep `src/compatibility.js`, package/lock metadata, helper diagnostics and documentation synchronized. A candidate must pass isolated native tests before installation and direct-update startup; passing never automatically promotes it to the historical validated list. Do not broaden the next-minor boundary without new integration evidence. See [forward compatibility](docs/forward-compatibility.md).
 
 ## Regression boundaries
 

@@ -1,14 +1,25 @@
-import { findDesktop, readHostInfo, isSupportedHost, SUPPORTED_DSH_VERSIONS } from './host.mjs';
+import {
+  findDesktop,
+  readHostInfo,
+  assessHost,
+  SUPPORTED_DSH_VERSIONS,
+  DSH_COMPATIBILITY_RANGE,
+} from './host.mjs';
 try {
   const host = findDesktop();
   const info = readHostInfo(host);
-  const supported = isSupportedHost(info);
+  const assessment = assessHost(info);
   console.log(
     JSON.stringify(
       {
         ...info,
-        supported,
-        supportedVersions: SUPPORTED_DSH_VERSIONS,
+        eligible: assessment.status !== 'unsupported',
+        compatibility: assessment.status,
+        reason: assessment.reason,
+        validatedVersions: SUPPORTED_DSH_VERSIONS,
+        eligibleRange: DSH_COMPATIBILITY_RANGE,
+        candidateNativeChecksRequired: assessment.status === 'candidate',
+        behaviorValidatedByDoctor: false,
         location: host.customLocation ? 'custom' : 'standard',
         credentialsInspected: false,
         desktopGuiValidated: false,
@@ -17,8 +28,8 @@ try {
       2,
     ),
   );
-  if (!supported) {
-    console.error('UNSUPPORTED_DSH_VERSION');
+  if (assessment.reason) {
+    console.error(assessment.reason);
     process.exitCode = 1;
   }
 } catch (error) {

@@ -9,6 +9,10 @@ The public package is `@pyh-pan/dsh-openai-oauth`. It preserves:
 
 The package name changes; registration identity does not.
 
+## Updating the same public bundle after a Desktop upgrade
+
+If the profile already links `@pyh-pan/dsh-openai-oauth` to this checkout, keep that owner and its credential namespace. On Desktop 0.2.1-rc.2, the previous plugin 0.3.1 is skipped because its peer range excludes rc.2; use the validated 0.3.2 checkout and the [installation checks](install.md), then the native add command and a safe restart. No private-to-public switch, credential migration, automatic reauthorization or version exemption is needed. A missing UI alone is not evidence that a grant was revoked.
+
 ## Safe switch
 
 1. Finish any active DSH tasks and inspect the existing bundle identity without dumping profiles/credential contents.

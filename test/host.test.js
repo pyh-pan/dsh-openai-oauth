@@ -7,6 +7,7 @@ import {
   hostEnvironment,
   SUPPORTED_DSH,
 } from '../scripts/host.mjs';
+import { HOST_VERSION_FIELDS } from '../src/compatibility.js';
 
 const executable = 'D:\\Apps\\DeepSeek Harness\\DeepSeek Harness.exe';
 const asar = 'D:\\Apps\\DeepSeek Harness\\resources\\app.asar';
@@ -16,9 +17,8 @@ const info = {
   platform: 'win32',
   arch: 'x64',
   desktopVersion: SUPPORTED_DSH,
-  llmVersion: SUPPORTED_DSH,
-  credentialsVersion: SUPPORTED_DSH,
-  connectionVersion: SUPPORTED_DSH,
+  ...Object.fromEntries(HOST_VERSION_FIELDS.map((field) => [field, SUPPORTED_DSH])),
+  contractIssues: [],
   cliAvailable: true,
 };
 
@@ -108,7 +108,7 @@ test('incompatible Host metadata is rejected before any installation command', (
           return { status: 0, stdout: JSON.stringify({ ...info, llmVersion: '0.1.0' }) };
         },
       }),
-    /UNSUPPORTED_DSH_VERSION/,
+    /DSH_COMPONENT_VERSION_MISMATCH/,
   );
   assert.equal(calls, 1);
   assert.throws(
@@ -121,8 +121,12 @@ test('helpers strip inherited debugging options, without enumerating secrets', (
     NODE_OPTIONS: '--inspect',
     ELECTRON_ENABLE_LOGGING: '1',
     PATH: 'example',
+    DSH_RACE_WORKER: '1',
+    DSH_RACE_DIR: 'unrelated-fixture-directory',
   });
   assert.equal(result.NODE_OPTIONS, undefined);
   assert.equal(result.ELECTRON_ENABLE_LOGGING, undefined);
+  assert.equal(result.DSH_RACE_WORKER, undefined);
+  assert.equal(result.DSH_RACE_DIR, undefined);
   assert.equal(result.PATH, 'example');
 });

@@ -20,10 +20,12 @@
 
 ## 支持范围
 
-要求 **DSH Desktop 0.2.1-rc.1 或 0.2.0-rc.2**；开发/安装脚本要求 **Node.js 24+**。
+已验证 Desktop 版本：**0.2.1-rc.2、0.2.1-rc.1 和 0.2.0-rc.2**；开发/安装脚本要求 **Node.js 24+**。
 
-- Windows：已完成原生 CLI 引用迁移；用户确认登录、模型/推理选择与其他源不变。0.2.1-rc.1 原生回归通过。
-- macOS：0.2.0-rc.2 工程/原生合成测试已通过；应用已更新至 0.2.1-rc.1，新版回归及桌面实网验收待完成。
+前向候选范围：`0.2.0-rc.2 || >=0.2.1-rc.1 <0.3.0-0`。后续 0.2.x 不再仅因精确版本号不同被拒绝，但属于**兼容候选，不冒充已验证版本**：安装或桌面直接升级后的首次加载，必须先通过隔离原生检查，再启用真实账号运行时。跨到 0.3（包括预发布）、组件混版、关键契约缺失/检查失败仍拒绝。详见[前向兼容策略](docs/forward-compatibility.md)。
+
+- Windows：0.2.1-rc.2 原生回归通过，用户已确认初步修复后桌面入口恢复；后续启动防护加固的最终桌面复核待完成。保留 0.2.1-rc.1 / 0.2.0-rc.2 支持与此前验收记录。
+- macOS：0.2.0-rc.2 工程/原生合成测试此前通过；0.2.1-rc.1 / 0.2.1-rc.2 的新版原生回归及桌面实网验收待完成，不以 Windows 或 Node 测试替代。
 - Windows/macOS/Linux CI 只证明 Node 协议/工程测试，不等于桌面授权、推理实测。
 - 暂不承诺旧 DSH、远程/headless Host 或 Linux Desktop。
 
@@ -52,7 +54,7 @@ npm run dsh -- plugin --profile desktop add -w .
 
 ```sh
 npm run pack
-npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.1.tgz
+npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.2.tgz
 ```
 
 不要同时启用原私有 bundle 和本项目：为保留既有授权，二者刻意使用同一 provider/凭据身份。切换步骤见 [迁移](docs/migration.md)。
@@ -93,6 +95,8 @@ npm run test:race
 协议测试使用合成数据/受控上游；原生测试使用临时凭据文件，不访问真实授权或消耗推理额度。真实账号验收与之分开记录。
 
 项目直接发布 ESM 源码，不需要提交构建目录、提取的 ASAR 或 vendor 快照。贡献说明见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+若 DSH 升级后模型源和授权设置同时消失，先检查[版本兼容性](docs/install.md#missing-source-and-authorization-settings-after-a-dsh-upgrade)，不要先删除授权或重新登录：不兼容的 bundle 会在运行代码前被跳过。
 
 链接安装更新后先验证，再安全重启。压缩包安装则重新安装已检查的新包。卸载：
 

@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
-import { SUPPORTED_DSH_VERSIONS } from './host.mjs';
+import { DSH_COMPATIBILITY_RANGE } from './host.mjs';
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const files = [];
 function walk(dir) {
@@ -21,6 +21,9 @@ for (const file of files) {
   }
 }
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
-if (pkg.peerDependencies?.['@deepseek-ai/dsh-llm'] !== SUPPORTED_DSH_VERSIONS.join(' || '))
-  throw Error('Revalidate the supported Host version before changing its peer constraint');
+if (pkg.peerDependencies?.['@deepseek-ai/dsh-llm'] !== DSH_COMPATIBILITY_RANGE)
+  throw Error('Keep the Host peer constraint synchronized with the shared compatibility policy');
+for (const file of ['README.md', 'README.zh.md', 'docs/forward-compatibility.md'])
+  if (!readFileSync(join(root, file), 'utf8').includes(DSH_COMPATIBILITY_RANGE))
+    throw Error(`Documented compatibility range differs from shared policy: ${file}`);
 console.log(`Syntax checked: ${files.length} JavaScript modules`);
