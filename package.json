@@ -1,6 +1,6 @@
 {
   "name": "@pyh-pan/dsh-openai-oauth",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "private": true,
   "description": "Independent Sign in with ChatGPT subscription provider for DeepSeek Harness Desktop.",
   "type": "module",
@@ -8,6 +8,9 @@
   "exports": {
     ".": "./src/index.js",
     "./client": "./src/client.js",
+    "./compaction": "./src/compaction.js",
+    "./compaction/locale/*.json": "./src/locale/compaction/*.json",
+    "./compaction/icon": "./src/compaction-icon.svg",
     "./package.json": "./package.json",
     "./locale/*.json": "./src/locale/*.json"
   },
@@ -34,6 +37,8 @@
     "pack": "node scripts/archive.mjs",
     "test:native": "node scripts/native.mjs",
     "test:race": "node scripts/native.mjs --race",
+    "test:compaction": "node scripts/native.mjs --compaction",
+    "prepare:compaction": "node scripts/prepare-compaction.mjs",
     "doctor": "node scripts/doctor.mjs",
     "dsh": "node scripts/dsh.mjs"
   },
@@ -57,10 +62,22 @@
   ],
   "license": "MIT",
   "peerDependencies": {
-    "@deepseek-ai/dsh-llm": "0.2.0-rc.2 || >=0.2.1-rc.1 <0.3.0-0"
+    "@deepseek-ai/dsh-llm": "0.2.0-rc.2 || >=0.2.1-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-compaction-basic": "0.2.0-rc.2 || >=0.2.1-rc.1 <0.3.0-0",
+    "@deepseek-ai/schemastery": "~3.18.5",
+    "zod": "^4.4.3"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/dsh-llm": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-compaction-basic": {
+      "optional": true
+    },
+    "@deepseek-ai/schemastery": {
+      "optional": true
+    },
+    "zod": {
       "optional": true
     }
   },

@@ -51,7 +51,7 @@ Quit the current desktop normally only after tasks finish; reopen the same insta
 
 ```sh
 npm run pack
-npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.2.tgz
+npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.3.tgz
 ```
 
 ## Missing source and authorization settings after a DSH upgrade

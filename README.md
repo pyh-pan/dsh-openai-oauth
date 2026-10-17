@@ -57,7 +57,7 @@ Only restart DSH after running tasks have finished. A window close may hide the 
 
 ```sh
 npm run pack
-npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.2.tgz
+npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.3.tgz
 ```
 
 Do not keep the old private bundle and this bundle enabled simultaneously: they deliberately preserve the same provider/credential identity. See [migration](docs/migration.md).
@@ -77,7 +77,7 @@ Accounts without the granted direct-inference scope remain signed in but disable
 
 - Models, reasoning choices and quota are account/server dependent, not an unlimited or universal model entitlement.
 - Currently advertises **text input** and client function tools. Direct image/file upload and hosted MCP/tool-search are not implemented.
-- The current SIWC preview does not accept some ordinary API parameters. Explicit `maxTokens`/`temperature` settings are rejected, not silently ignored; clear them before using this source.
+- Explicit `maxTokens`/`temperature` remain rejected under this provider's conservative SIWC preview contract, not silently ignored; clear them before ordinary chat. DSH's built-in capped summarizer needs the separately reviewed [SIWC compaction replacement](docs/compaction.md)—updating this provider alone does not change a preset.
 - Subscription failures never switch to an API-key/balance provider.
 - Tokens stay in the native Host credentials service, not browser storage or ordinary plugin settings. Native local storage is not a promise of OS-keychain encryption.
 - Sign-out attempts remote revocation and clears this account's local tokens, retaining its registration. Unconfirmed remote revocation is reported; review access in ChatGPT settings.
@@ -92,6 +92,7 @@ npm run check
 npm run test:package
 npm run test:native
 npm run test:race
+npm run test:compaction # optional compaction hook: Desktop 0.2.1-rc.2 only
 ```
 
 Pure tests use generated identities and mock upstreams. Native tests use an installed DSH and **temporary** credentials; they do not read your grant or spend inference quota. Real-account desktop validation is separately documented and always user-controlled.

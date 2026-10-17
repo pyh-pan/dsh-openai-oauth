@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "SIWC 安全会话压缩",
+    "description": "保留原生 checkpoint 事务，为 SIWC 摘要显式省略服务端 Token 硬上限，添加本地限制和失败后安全暂停。"
+  }
+}

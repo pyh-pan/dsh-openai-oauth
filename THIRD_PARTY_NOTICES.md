@@ -2,7 +2,7 @@
 
 ## DeepSeek Harness
 
-The plugin uses the installed DSH public Host/client interfaces as peers. No extracted DSH application, ASAR, framework snapshot, or pi-ai runtime is distributed here. DSH and its dependencies retain their respective licenses and trademarks.
+The plugin uses the installed DSH public Host/client interfaces as peers. The optional compaction entry subclasses the installed public BasicCompactionEngine hook and uses an original checkpoint template; it does not redistribute the native transaction/range/measurement implementation. No extracted DSH application, ASAR, framework snapshot, or pi-ai runtime is distributed here. DSH and its dependencies retain their respective MIT licenses and trademarks. Schemastery and Zod remain external installed Host peers, not vendored dependencies.
 
 ## OpenAI
 

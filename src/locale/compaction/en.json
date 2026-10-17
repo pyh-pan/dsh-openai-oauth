@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "SIWC-safe conversation compaction",
+    "description": "Native checkpoint transactions with an explicit no-server-token-cap SIWC summary route, local limits and fail-closed continuation."
+  }
+}

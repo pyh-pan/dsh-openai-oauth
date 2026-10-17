@@ -3,12 +3,17 @@ import { fileURLToPath } from 'node:url';
 import { findDesktop, inspectHost, hostEnvironment } from './host.mjs';
 try {
   const args = process.argv.slice(2);
-  if (args.some((a) => a !== '--race')) throw Error('Only --race is supported');
+  if (args.length > 1 || args.some((a) => !['--race', '--compaction'].includes(a)))
+    throw Error('Only --race or --compaction is supported');
   const host = findDesktop();
   inspectHost(host);
   const script = fileURLToPath(
     new URL(
-      args.includes('--race') ? './native-session-race.mjs' : './native-siwc.mjs',
+      args.includes('--race')
+        ? './native-session-race.mjs'
+        : args.includes('--compaction')
+          ? './native-compaction.mjs'
+          : './native-siwc.mjs',
       import.meta.url,
     ),
   );
