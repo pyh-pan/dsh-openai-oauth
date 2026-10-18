@@ -27,6 +27,12 @@ The creation header alone is **not authoritative**. A header can say `standard` 
 
 Unknown sessions, mismatched revisions or uncovered compositions fail locally with `SIWC_SESSION_COVERAGE_UNAVAILABLE`, `SIWC_PRESET_REVISION_MISMATCH` or `SIWC_COMPACTION_NOT_COVERED`, before a Responses body is sent. Unexpected inspection failures become the fixed `DSH_SIWC_PRESET_CONTRACT_MISSING`, not a retryable network error. Ordinary standalone calls without a session identity remain possible; they do not claim preset protection.
 
+## Runtime coverage in the existing settings page
+
+The original ChatGPT subscription settings card shows four preset-definition states and aggregate live SIWC session counts: checked, protected, compaction-needed and uncovered. It uses the same owner-authenticated management API, not another endpoint or plugin. The native current-definition inventory and each Agent's exact retained revision are inspected at read time. Inspection is bounded; unavailable or incomplete inspection is never shown as successful validation.
+
+No session/account identifiers, module paths, config, conditions, prompts or arbitrary errors enter the coverage report. A protected-but-paused session is distinct from an uncovered one. Zero live SIWC sessions produces **pending**, not a claim that a real historic session was tested. Refresh the existing settings card after opening the target session; do not send a real request just to make a status indicator green.
+
 ## Honest summary limits
 
 For the **finally resolved summary target** `provider=chatgpt-subscription`, including explicit summary routes and conversation `modelPolicies`:

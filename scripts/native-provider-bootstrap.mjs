@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRequire, registerHooks } from 'node:module';
 import { pathToFileURL } from 'node:url';
+import { API_PATH } from '../src/siwc/controller.js';
 const asar = process.env.DSH_ASAR;
 if (!asar) throw Error('Set DSH_ASAR');
 const req = createRequire(pathToFileURL(join(asar, 'dsh/package.json')));
@@ -115,6 +116,17 @@ try {
   }
   for (const e of ctx.loader.entries())
     assert.deepEqual(e.options.config, raw.get(e.options.config.id));
+  const carrier = ctx.connection.createSharedFetchHandler('/api');
+  const stateResponse = await carrier.fetch(new Request('http://localhost' + API_PATH), {
+    id: 'fixture-owner',
+    principal: { kind: 'owner' },
+  });
+  assert.equal(stateResponse.status, 200);
+  const state = await stateResponse.json();
+  assert.equal(state.coverage.presets.filter((p) => p.status === 'ready').length, 4);
+  assert.equal(state.coverage.status, 'pending');
+  assert.equal(state.coverage.sessions.checked, 0);
+  assert.ok(!JSON.stringify(state.coverage).includes('file:'));
   await provider.dispose();
   await ctx.loader.await();
   assert.ok(!ctx.llm.listProviders().some((p) => p.id === 'chatgpt-subscription'));
@@ -135,6 +147,7 @@ try {
       realInference: false,
       networkDeniedInFixture: true,
       nativeProfileCompatibilityPreflight: true,
+      ownerSettingsCoverageDiagnostics: true,
     }),
   );
 } finally {

@@ -69,6 +69,25 @@ window.__ModuleLoader__.load({
       ACCOUNT_REAUTH_REQUIRED: '请重新授权此账号，或选择另一个已授权账号。',
       VERSION_MISMATCH:
         '桌面 Host 尚未加载 SIWC 新版本。请重启 DSH 后再使用；没有启动旧 Codex 登录。',
+      coverageTitle: '会话安全覆盖',
+      coverageReady: '就绪',
+      coverageUncovered: '未覆盖',
+      coverageBroken: '加载失败',
+      coverageAbsent: '未声明',
+      coveragePending: '预设配置就绪；尚无活跃 SIWC 会话可检查。',
+      coverageUnavailable: '暂未取得运行时检查结果，不能据此宣称会话已受保护。',
+      coverageChecked: '已检查',
+      coverageProtected: '受保护',
+      coverageBlocked: '压缩需处理',
+      coverageUnsafe: '未覆盖',
+      SIWC_COMPACTION_REQUIRED:
+        '压缩尚未恢复，本次长历史请求已被阻止。请在空闲时处理失败原因并运行 /compact，或使用人工交接开启新会话。',
+      SIWC_COMPACTION_NOT_COVERED:
+        '当前会话的实际预设版本尚未受保护，请安全重启后检查覆盖状态；不要反复重试或重新授权。',
+      SIWC_PRESET_REVISION_MISMATCH:
+        '会话选择与实际预设版本不一致，请安全重启并检查；本次请求未发送。',
+      SIWC_SESSION_COVERAGE_UNAVAILABLE:
+        '会话尚未在宿主中就绪，本次请求已被本地阻止；这不是账号授权失效。',
     };
     const en = {
       title: 'ChatGPT subscription',
@@ -140,8 +159,29 @@ window.__ModuleLoader__.load({
       ACCOUNT_REAUTH_REQUIRED: 'Authorize this account again or choose another authorized account.',
       VERSION_MISMATCH:
         'The Host has not loaded the SIWC update. Restart DSH first; the legacy Codex sign-in was not started.',
+      coverageTitle: 'Session safety coverage',
+      coverageReady: 'Ready',
+      coverageUncovered: 'Uncovered',
+      coverageBroken: 'Load failed',
+      coverageAbsent: 'Not declared',
+      coveragePending: 'Preset definitions are ready; no live SIWC sessions have been checked yet.',
+      coverageUnavailable:
+        'Runtime inspection is unavailable. Session protection has not been verified.',
+      coverageChecked: 'Checked',
+      coverageProtected: 'Protected',
+      coverageBlocked: 'Compaction needed',
+      coverageUnsafe: 'Uncovered',
+      SIWC_COMPACTION_REQUIRED:
+        'Compaction has not recovered; this long-history request was blocked. At idle, fix its cause and run /compact, or start a new session with a reviewed handoff.',
+      SIWC_COMPACTION_NOT_COVERED:
+        'This session retains an unprotected preset revision. Restart safely and inspect coverage; do not repeatedly retry or reauthorize.',
+      SIWC_PRESET_REVISION_MISMATCH:
+        'The selected and retained preset revisions disagree. Restart safely and inspect coverage; this request was not sent.',
+      SIWC_SESSION_COVERAGE_UNAVAILABLE:
+        'This session is not ready in the Host. The request was blocked locally; this does not mean authorization expired.',
     };
     const css = `
+.cgs-safety{margin:16px 0;padding:14px 0;border-top:1px solid var(--dsw-alias-border-l2);border-bottom:1px solid var(--dsw-alias-border-l2)}.cgs-safety h4{margin:0 0 10px;font-size:13px;font-weight:600}.cgs-safety-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,130px),1fr));gap:8px 18px}.cgs-safety-item{display:flex;align-items:baseline;justify-content:space-between;gap:8px;font-size:12px}.cgs-safety-item code{font-size:11px}.cgs-safety p{font-size:11px;margin:10px 0 0;line-height:1.6}
 .cgs-card{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-settings-card-fill);border:1px solid var(--dsw-alias-settings-card-stroke);border-radius:16px;padding:22px;margin-top:16px;font:inherit;line-height:1.6}
 .cgs-head,.cgs-row,.cgs-actions,.cgs-brand,.cgs-usage{display:flex;align-items:center;gap:10px}.cgs-head,.cgs-row{justify-content:space-between}.cgs-head{gap:20px}.cgs-brand{gap:12px}.cgs-logo{width:36px;height:36px;display:grid;place-items:center;background:#0b0b0b;border-radius:11px;flex-shrink:0}.cgs-logo img{width:26px;height:26px}.cgs-kicker{font-size:10px;letter-spacing:.08em;color:var(--dsw-alias-label-tertiary)}.cgs-card h3{margin:0;font-size:17px;font-weight:600;letter-spacing:-.02em}.cgs-code{font:11px ui-monospace,monospace;color:var(--dsw-alias-label-tertiary)}
 .cgs-muted{font-size:13px;color:var(--dsw-alias-label-secondary);margin:12px 0}.cgs-small{font-size:12px;color:var(--dsw-alias-label-tertiary);margin:10px 0 0}.cgs-actions{flex-wrap:wrap;margin-top:14px}.cgs-row .cgs-actions{margin:0;flex-shrink:0}.cgs-accounts{margin-top:18px;border-top:1px solid var(--dsw-alias-settings-card-stroke)}.cgs-row{padding:15px 0;gap:16px;border-bottom:1px solid var(--dsw-alias-settings-card-stroke);flex-wrap:wrap}.cgs-account{min-width:0;flex:1}.cgs-label{font-size:13px;font-weight:500;overflow-wrap:anywhere}.cgs-tag{font-size:11px;color:var(--dsw-alias-label-tertiary)}.cgs-tag[data-active=true]{color:var(--dsw-alias-state-success-primary)}.cgs-empty{padding:24px 0 16px;font-size:13px;color:var(--dsw-alias-label-secondary)}
@@ -308,6 +348,60 @@ window.__ModuleLoader__.load({
         ),
       );
     }
+    function Coverage({ t, report, notice }) {
+      if (!report) return null;
+      const ids = ['standard', 'cordis', 'ptc', 'minimal'];
+      const statuses = {
+        ready: 'coverageReady',
+        uncovered: 'coverageUncovered',
+        broken: 'coverageBroken',
+        absent: 'coverageAbsent',
+      };
+      const presets = Array.isArray(report.presets)
+        ? report.presets.filter((p) => ids.includes(p?.id))
+        : [];
+      const count = (key) =>
+        Number.isSafeInteger(report.sessions?.[key]) && report.sessions[key] >= 0
+          ? report.sessions[key]
+          : 0;
+      const safetyCodes = [
+        'SIWC_COMPACTION_REQUIRED',
+        'SIWC_COMPACTION_NOT_COVERED',
+        'SIWC_PRESET_REVISION_MISMATCH',
+        'SIWC_SESSION_COVERAGE_UNAVAILABLE',
+      ];
+      return h(
+        'aside',
+        { className: 'cgs-safety', role: 'status', 'aria-live': 'polite' },
+        h('h4', null, t('coverageTitle')),
+        h(
+          'div',
+          { className: 'cgs-safety-grid' },
+          ...presets.map((p) =>
+            h(
+              'div',
+              { key: p.id, className: 'cgs-safety-item' },
+              h('code', null, p.id),
+              h(
+                'span',
+                { className: p.status === 'ready' ? 'cgs-muted' : 'cgs-error' },
+                t(Object.hasOwn(statuses, p.status) ? statuses[p.status] : 'coverageUncovered'),
+              ),
+            ),
+          ),
+        ),
+        h(
+          'p',
+          { className: 'cgs-muted' },
+          `${t('coverageChecked')} ${count('checked')} · ${t('coverageProtected')} ${count('covered')} · ${t('coverageBlocked')} ${count('blocked')} · ${t('coverageUnsafe')} ${count('uncovered')}`,
+        ),
+        report.status === 'pending' && h('p', { className: 'cgs-muted' }, t('coveragePending')),
+        report.status === 'unavailable' &&
+          h('p', { className: 'cgs-error' }, t('coverageUnavailable')),
+        safetyCodes.includes(notice?.code) &&
+          h('p', { className: 'cgs-error', role: 'alert' }, t(notice.code)),
+      );
+    }
     function Card({ t }) {
       const { state, error, busy, running, act, refresh } = useSource();
       const [confirm, setConfirm] = React.useState(null);
@@ -371,6 +465,7 @@ window.__ModuleLoader__.load({
           usage(t),
         ),
         h('p', { className: 'cgs-muted' }, t('intro')),
+        h(Coverage, { t, report: state?.coverage, notice: state?.notice }),
         !state
           ? h('p', { className: 'cgs-muted', role: 'status' }, t('loading'))
           : h(

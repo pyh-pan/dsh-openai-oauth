@@ -23,11 +23,10 @@ const plugin = createHostPlugin(
           installPresetIntegration: async (ctx) => {
             const { default: NativePreset } = await import('@deepseek-ai/dsh-agent-preset');
             const { installPresetIntegration } = await import('./siwc/preset-integration.js');
-            return installPresetIntegration(
-              ctx,
-              NativePreset,
-              new URL('./compaction.js', import.meta.url).href,
-            );
+            const moduleName = new URL('./compaction.js', import.meta.url).href;
+            const integration = await installPresetIntegration(ctx, NativePreset, moduleName);
+            const { readCoverageReport } = await import('./siwc/coverage-report.js');
+            return { ...integration, readCoverage: () => readCoverageReport(ctx, moduleName) };
           },
         }
       : {}),

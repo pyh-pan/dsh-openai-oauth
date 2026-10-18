@@ -10,8 +10,11 @@ export class SiwcController {
   #starting = false;
   #closed = false;
   #current;
-  constructor({ accounts, protocol, sessions, onSelection, readNotice }, options = {}) {
-    Object.assign(this, { accounts, protocol, sessions, onSelection, readNotice });
+  constructor(
+    { accounts, protocol, sessions, onSelection, readNotice, readCoverage },
+    options = {},
+  ) {
+    Object.assign(this, { accounts, protocol, sessions, onSelection, readNotice, readCoverage });
     this.options = options;
   }
   #assertOpen() {
@@ -27,6 +30,7 @@ export class SiwcController {
       selection: await this.accounts.selection(),
       attempt: this.#current?.status ?? null,
       notice: this.readNotice?.() ?? null,
+      ...(this.readCoverage ? { coverage: await this.readCoverage() } : {}),
       // Never serialize the AccountStore or the protocol instance.
     };
   }

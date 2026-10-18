@@ -130,6 +130,7 @@ export function createHostPlugin(
         {
           ...runtime,
           readNotice: () => adapter.notice,
+          readCoverage: integration?.readCoverage,
           onSelection: async (selection) => {
             adapter.clearNotice();
             await runtime.sessions.selectionChanged?.(selection);
