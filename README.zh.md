@@ -54,7 +54,7 @@ npm run dsh -- plugin --profile desktop add -w .
 
 ```sh
 npm run pack
-npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.3.tgz
+npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.4.tgz
 ```
 
 不要同时启用原私有 bundle 和本项目：为保留既有授权，二者刻意使用同一 provider/凭据身份。切换步骤见 [迁移](docs/migration.md)。
@@ -74,7 +74,7 @@ npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth
 
 - 模型/推理档位/额度取决于账号与服务端，不保证无限额度或任意模型。
 - 当前声明文本输入与客户端 function 工具；未实现直接图片/文件上传及托管 MCP/tool-search。
-- 本适配器保留 SIWC 预览的保守参数契约：普通调用显式 `maxTokens`/`temperature` 仍明确报错，不假装生效。DSH 原生摘要器必传 cap，需要单独审查并安装 [SIWC 压缩兼容后端](docs/compaction.md)；仅更新模型源不会自动修改 preset。
+- 本适配器保留 SIWC 预览的保守参数契约：普通调用显式 `maxTokens`/`temperature` 仍明确报错，不假装生效。在 Desktop 0.2.1-rc.2 上，0.3.4 已将 [摘要兼容与逐会话覆盖保护](docs/compaction.md)统一集成到原插件，对 standard/cordis/ptc/minimal 在内存中适配，不写用户 preset，也不需要额外安装本地压缩 bundle。其他版本或自定义组合不会自动获得这项验证。
 - 失败不会回退到 API Key 或其他余额源。
 - Token 仅保存在宿主原生 credentials 服务，不进入浏览器存储或普通配置；不宣称本地文件等同系统钥匙串加密。
 - 退出先尝试远端撤销，再清本账号本地 Token、保留注册；远端未确认会明确报告，应在 ChatGPT 设置检查访问。
@@ -90,7 +90,8 @@ npm run check
 npm run test:package
 npm run test:native
 npm run test:race
-npm run test:compaction # 可选摘要 hook 单独固定于 Desktop 0.2.1-rc.2
+npm run test:compaction # 摘要 hook 固定于 Desktop 0.2.1-rc.2
+npm run test:presets    # 真实主入口与全部受支持 preset 隔离组
 ```
 
 协议测试使用合成数据/受控上游；原生测试使用临时凭据文件，不访问真实授权或消耗推理额度。真实账号验收与之分开记录。

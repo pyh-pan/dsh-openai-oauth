@@ -6,6 +6,7 @@ import { BlockAssembler, LlmError } from '@deepseek-ai/dsh-llm';
 import Schema from '@deepseek-ai/schemastery';
 import { z } from 'zod';
 import { createCompactionClass, safetyDefinition } from './siwc/compaction.js';
+import { COVERAGE, COVERAGE_TOKEN } from './siwc/preset-integration.js';
 
 // This optional hook is behaviorally pinned separately from the base OAuth
 // compatibility range. Future native implementations need the native suite.
@@ -31,6 +32,7 @@ export default class SiwcCompactionEngine extends Engine {
   });
   constructor(ctx, config) {
     super(ctx, config);
+    Object.defineProperty(this, COVERAGE, { value: COVERAGE_TOKEN });
     ctx.sessionProjections.register(safetyDefinition(z.object({ failed: z.boolean() })));
   }
 }

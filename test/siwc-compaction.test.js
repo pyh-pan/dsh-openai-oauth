@@ -45,6 +45,9 @@ class Basic {
     if (this.ctx.pressureError) throw this.ctx.pressureError;
     return null;
   }
+  async compactNow() {
+    return this.ctx.manualResult;
+  }
 }
 const Engine = createCompactionClass({
   BasicCompactionEngine: Basic,
@@ -310,6 +313,27 @@ test('whole native pressure failure blocks even without a failed transaction end
     'enter',
   );
 });
+test('manual recovery needs a committed useful result, not null or an invalid return', async () => {
+  const f = fixture();
+  f.ctx.pressureError = Error('synthetic failed pressure');
+  await assert.rejects(f.engine.compactIfNeeded(f.agent, 'pressure', new AbortController().signal));
+  assert.throws(() => f.engine.assertConversationReady(f.agent.session), {
+    code: 'SIWC_COMPACTION_REQUIRED',
+  });
+  f.ctx.manualResult = null;
+  assert.equal(await f.engine.compactNow(f.agent, new AbortController().signal), null);
+  assert.throws(() => f.engine.assertConversationReady(f.agent.session), {
+    code: 'SIWC_COMPACTION_REQUIRED',
+  });
+  f.ctx.manualResult = undefined;
+  await assert.rejects(f.engine.compactNow(f.agent, new AbortController().signal), {
+    code: 'DSH_SIWC_COMPACTION_RESULT_INVALID',
+  });
+  f.ctx.manualResult = { shadowedSeqs: [1, 2] };
+  await f.engine.compactNow(f.agent, new AbortController().signal);
+  assert.doesNotThrow(() => f.engine.assertConversationReady(f.agent.session));
+});
+
 test('local limits reject typos, zero and timer overflow', () => {
   assert.deepEqual(resolveSummaryLimits(), { summaryTimeoutMs: 300000, maxSummaryBytes: 262144 });
   for (const config of [

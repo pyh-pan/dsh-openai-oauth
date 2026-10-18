@@ -52,13 +52,24 @@ async function assertOwnerBoundary(connection, isClosed) {
 }
 
 // Runtime factories must return protected host-side services, not UI data.
-export function createHostPlugin(native, createRuntime, { verifyCandidate, Schema } = {}) {
+export function createHostPlugin(
+  native,
+  createRuntime,
+  { verifyCandidate, Schema, installPresetIntegration } = {},
+) {
   const issues = nativeContractIssues(native);
   if (issues.length) throw new Error(`DSH_HOST_CONTRACT_MISSING:${issues.join(',')}`);
   const Adapter = createAdapterClass(native);
   return {
     name: 'chatgpt-subscription-login',
-    inject: ['connection', 'credentials', 'llm'],
+    inject: [
+      'connection',
+      'credentials',
+      'llm',
+      ...(installPresetIntegration
+        ? ['loader', 'agentPresets', 'agents', 'sessionProjections']
+        : []),
+    ],
     ...(Schema ? { Config: createPluginConfig(Schema) } : {}),
     async apply(ctx, config) {
       const { requestPolicy } = normalizePluginConfig(config);
@@ -97,8 +108,15 @@ export function createHostPlugin(native, createRuntime, { verifyCandidate, Schem
         console.warn(
           `DSH_COMPATIBILITY_CANDIDATE:${compatibility.version}:local synthetic checks passed; not a validated release`,
         );
+      const integration = await installPresetIntegration?.(ctx);
+      if (closed) return;
       runtime = createRuntime(ctx);
-      adapter = new Adapter({ ...runtime, requestPolicy, logger: ctx.logger });
+      adapter = new Adapter({
+        ...runtime,
+        requestPolicy,
+        logger: ctx.logger,
+        assertCoverage: integration?.assertCoverage,
+      });
       const handle = ctx.llm.registerAdapter([PROVIDER], adapter);
       if (typeof handle?.replace !== 'function')
         throw new Error('DSH_ADAPTER_HANDLE_CONTRACT_CHANGED');

@@ -133,6 +133,7 @@ export function createAdapterClass({ LlmAdapter, LlmError, attributionHeaders })
     #policy;
     #logger;
     #timingNow;
+    #assertCoverage;
     constructor({
       accounts,
       sessions,
@@ -142,6 +143,7 @@ export function createAdapterClass({ LlmAdapter, LlmError, attributionHeaders })
       requestPolicy,
       logger,
       timingNow,
+      assertCoverage,
     }) {
       super();
       this.#accounts = accounts;
@@ -157,6 +159,7 @@ export function createAdapterClass({ LlmAdapter, LlmError, attributionHeaders })
       );
       this.#logger = logger;
       this.#timingNow = timingNow;
+      this.#assertCoverage = assertCoverage;
     }
     providerInfo(provider) {
       return { id: provider, name: 'ChatGPT Subscription' };
@@ -427,6 +430,9 @@ export function createAdapterClass({ LlmAdapter, LlmError, attributionHeaders })
       try {
         this.#signal(options.signal).throwIfAborted();
         if (options.provider !== PROVIDER) reject('NO_ADAPTER');
+        // The native prepareCall path bypasses stream(), so admission belongs
+        // here too, before body projection and every Responses dispatch.
+        this.#assertCoverage?.(options.sessionId, options.purpose);
         const capability = same(selection, this.#cache?.selection)
           ? this.#cache.capabilities.get(options.model)
           : undefined;

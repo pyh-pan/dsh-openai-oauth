@@ -59,7 +59,7 @@ For a clean/archive installation only. If the package is already linked to a che
 
 ```sh
 npm run pack
-npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.3.tgz
+npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.4.tgz
 ```
 
 Do not keep the old private bundle and this bundle enabled simultaneously: they deliberately preserve the same provider/credential identity. See [migration](docs/migration.md).
@@ -79,7 +79,7 @@ Accounts without the granted direct-inference scope remain signed in but disable
 
 - Models, reasoning choices and quota are account/server dependent, not an unlimited or universal model entitlement.
 - Currently advertises **text input** and client function tools. Direct image/file upload and hosted MCP/tool-search are not implemented.
-- Explicit `maxTokens`/`temperature` remain rejected under this provider's conservative SIWC preview contract, not silently ignored; clear them before ordinary chat. DSH's built-in capped summarizer needs the separately reviewed [SIWC compaction replacement](docs/compaction.md)—updating this provider alone does not change a preset.
+- Explicit `maxTokens`/`temperature` remain rejected under this provider's conservative SIWC preview contract, not silently ignored; clear them before ordinary chat. On Desktop 0.2.1-rc.2, 0.3.4 integrates [SIWC compaction and per-session coverage safety](docs/compaction.md) into the same provider bundle for standard/cordis/ptc/minimal, in memory without writing user presets. No separate local compatibility bundle is needed. Other runtime versions and custom compositions do not automatically acquire this validation.
 - Subscription failures never switch to an API-key/balance provider.
 - Tokens stay in the native Host credentials service, not browser storage or ordinary plugin settings. Native local storage is not a promise of OS-keychain encryption.
 - Sign-out attempts remote revocation and clears this account's local tokens, retaining its registration. Unconfirmed remote revocation is reported; review access in ChatGPT settings.
@@ -94,7 +94,8 @@ npm run check
 npm run test:package
 npm run test:native
 npm run test:race
-npm run test:compaction # optional compaction hook: Desktop 0.2.1-rc.2 only
+npm run test:compaction # Desktop 0.2.1-rc.2 hook
+npm run test:presets    # real main entry + all supported preset realms
 ```
 
 Pure tests use generated identities and mock upstreams. Native tests use an installed DSH and **temporary** credentials; they do not read your grant or spend inference quota. Real-account desktop validation is separately documented and always user-controlled.

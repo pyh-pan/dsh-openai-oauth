@@ -122,9 +122,14 @@ export function inspectHost(host, options) {
 }
 
 export function runCandidateChecks(host, { spawn = spawnSync } = {}) {
-  // No real profiles, credentials or upstreams: both scripts use disposable
+  // No real profiles, credentials or upstreams: these scripts use disposable
   // stores. This is shared by installation and direct Desktop-update startup.
-  for (const script of ['native-siwc.mjs', 'native-session-race.mjs']) {
+  for (const script of [
+    'native-siwc.mjs',
+    'native-session-race.mjs',
+    'native-preset-integration.mjs',
+    'native-provider-bootstrap.mjs',
+  ]) {
     const checked = spawn(host.executable, ['--expose-internals', join(scripts, script)], {
       env: hostEnvironment(host),
       stdio: 'inherit',

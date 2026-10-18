@@ -97,6 +97,15 @@ export function createCompactionClass(
         return next();
       });
     }
+    // Provider-wide admission also checks this state for prepared/direct calls,
+    // not just the loop's scoped pre-step listener. Compaction itself remains
+    // admitted so an explicit successful /compact can recover the session.
+    assertConversationReady(session) {
+      const state = this.ctx.sessionProjections.stateOf(session, SAFETY_KEY);
+      if (state === undefined) throw fail('DSH_SIWC_COMPACTION_SAFETY_MISSING');
+      if (state.failed || this._siwcFailedPressure.has(session))
+        throw fail('SIWC_COMPACTION_REQUIRED');
+    }
     // Preserve the native algorithm and its transaction owner. This outer
     // catch observes convergence/config/active-lock failures that occur outside
     // summarize() and therefore may have no failed compaction/end to project.
@@ -110,6 +119,15 @@ export function createCompactionClass(
           this._siwcFailedPressure.add(agent.session);
         throw error;
       }
+    }
+    async compactNow(agent, signal, sourceCommandId) {
+      const result = await super.compactNow(agent, signal, sourceCommandId);
+      if (result !== null) {
+        if (!Array.isArray(result?.shadowedSeqs) || result.shadowedSeqs.length === 0)
+          throw fail('DSH_SIWC_COMPACTION_RESULT_INVALID');
+        this._siwcFailedPressure.delete(agent.session);
+      }
+      return result;
     }
     async summarize(input, agent, signal) {
       const target = summaryTarget(this.config, agent);

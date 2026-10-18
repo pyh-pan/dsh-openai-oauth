@@ -36,16 +36,22 @@ npm run doctor
 npm run dsh -- plugin --profile desktop add -w .
 ```
 
-The helper starts the installed Electron executable in its supported Node/CLI mode. It does not start a second GUI, patch the app, dump config or install a replacement Host. Verify the doctor-reported version, component tuple, `compatibility` classification and `contractIssues` before proceeding. `eligible: true` is not a behavioral or GUI validation. Candidate install/activation CLI operations automatically run both isolated native suites before touching the real profile (native removal remains available after structural checks for recovery); candidate startup after a direct Desktop update also checks the running installation before creating its real-account runtime.
+The helper starts the installed Electron executable in its supported Node/CLI mode. It does not start a second GUI, patch the app, dump config or install a replacement Host. Verify the doctor-reported version, component tuple, `compatibility` classification and `contractIssues` before proceeding. `eligible: true` is not a behavioral or GUI validation. Candidate install/activation CLI operations automatically run all isolated native suites, including preset integration and the real provider entry, before touching the real profile (native removal remains available after structural checks for recovery); candidate startup after a direct Desktop update also checks the running installation before creating its real-account runtime.
 
 Run native synthetic checks:
 
 ```sh
 npm run test:native
 npm run test:race
+npm run test:compaction
+npm run test:presets
 ```
 
 Quit the current desktop normally only after tasks finish; reopen the same installation after installation/removal. Complete sign-in yourself in Settings → Models. A callback on another machine cannot authorize this local Host.
+
+## Unified compaction in 0.3.4
+
+On Desktop 0.2.1-rc.2 the same provider package adapts supported native presets in memory and checks the actual retained session revision before Responses dispatch. It does not persist full preset snapshots. If the former `@local/dsh-siwc-compaction-compat` bundle is installed, migrate it through the native manager after validating the new main entry; do not keep it as an independent update dependency. See [migration and per-session verification](compaction.md#installation-and-migration-from-the-former-local-bundle). Verify the projected selected preset (including cordis), not merely a standard creation header or a visible model source.
 
 ## Updating a linked checkout safely
 
@@ -63,7 +69,7 @@ Use this route only for a clean/archive installation with no existing checkout l
 
 ```sh
 npm run pack
-npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.3.tgz
+npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.4.tgz
 ```
 
 ## Missing source and authorization settings after a DSH upgrade
@@ -73,7 +79,7 @@ DSH Desktop 0.2.1-rc.2 checks bundle requirements during startup. Plugin 0.3.1 d
 Plugin 0.3.2 restores rc.2 loading and adopts a bounded same-minor candidate range shared by the manifest/helper, with mandatory isolated behavioral checks and live contract guards. Candidates are never relabeled as validated just because a version string matches. No version exemption is granted; see [what future updates can break](forward-compatibility.md).
 
 1. Use `npm run doctor` to identify the actual release tuple without inspecting credentials. An old checkout reports `UNSUPPORTED_DSH_VERSION` and refuses installation.
-2. Review/update this checkout to the compatible revision and run the complete checks above, including both native suites when a local Desktop is available.
+2. Review/update this checkout to the compatible revision and run the complete checks above, including the native provider/race/compaction/preset suites when a local Desktop is available.
 3. For an existing link to this same package, use the same native add command; do not remove grants, edit profile files, or install a second owner. A different old private bundle needs the [migration procedure](migration.md).
 4. After active tasks finish, Quit DSH normally and reopen it. Verify Settings → Models → ChatGPT subscription and the existing model picker; keep other providers and the current selection unchanged. If authorization is actually required, complete it yourself through the official flow.
 5. If the runtime is out of policy, a contract check fails, or either entry remains absent, stop and collect only package identity/version and sanitized failure information. Do not use `allow-version`, broaden the range to `*`, or patch ASAR/framework dependencies to force loading.

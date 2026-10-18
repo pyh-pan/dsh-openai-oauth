@@ -66,7 +66,7 @@ test('read-only diagnostics show actual unsupported versions without allowing CL
   assert.deepEqual(readHostInfo(host, { spawn: spawn(info) }), info);
   assert.throws(() => inspectHost(host, { spawn: spawn(info) }), /UNSUPPORTED_DSH_VERSION/);
 });
-test('a candidate must pass both isolated native suites before the requested CLI command', () => {
+test('a candidate must pass all isolated native suites before the requested CLI command', () => {
   const calls = [];
   invokeCli(host, ['plugin', '--profile', 'desktop', 'add', '-w', '.'], {
     spawn(file, argv, options) {
@@ -76,17 +76,19 @@ test('a candidate must pass both isolated native suites before the requested CLI
         : { status: 0 };
     },
   });
-  assert.equal(calls.length, 4);
+  assert.equal(calls.length, 6);
   assert.match(calls[1].argv[1], /native-siwc\.mjs$/);
   assert.match(calls[2].argv[1], /native-session-race\.mjs$/);
-  assert.deepEqual(calls[3].argv.slice(2), ['plugin', '--profile', 'desktop', 'add', '-w', '.']);
+  assert.match(calls[3].argv[1], /native-preset-integration\.mjs$/);
+  assert.match(calls[4].argv[1], /native-provider-bootstrap\.mjs$/);
+  assert.deepEqual(calls[5].argv.slice(2), ['plugin', '--profile', 'desktop', 'add', '-w', '.']);
   for (const call of calls) {
     assert.equal(call.file, host.executable);
     assert.equal(call.options.shell, false);
   }
 });
 test('failed candidate behavior checks never invoke the real profile command', () => {
-  for (const failedCall of [2, 3]) {
+  for (const failedCall of [2, 3, 4, 5]) {
     let calls = 0;
     assert.throws(
       () =>

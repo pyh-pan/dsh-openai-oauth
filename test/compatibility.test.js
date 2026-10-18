@@ -62,6 +62,7 @@ function fixture({
   denyOwners = false,
   stalled = false,
   preflight = async () => {},
+  integration,
 } = {}) {
   const trace = [];
   const cleanup = [];
@@ -125,7 +126,7 @@ function fixture({
           },
         };
       },
-      { verifyCandidate: preflight },
+      { verifyCandidate: preflight, installPresetIntegration: integration },
     );
   const dispose = async () => {
     for (const fn of cleanup) await fn();
@@ -304,4 +305,38 @@ test('production candidate preflight pins the running executable and rejects ins
     );
   }
   assert.equal(checked.length, 1);
+});
+
+test('preset integration rejection cannot initialize accounts or register an adapter', async () => {
+  const f = fixture({
+    version: '0.2.1-rc.2',
+    integration: async () => {
+      throw Error('DSH_SIWC_PRESET_CONTRACT_MISSING');
+    },
+  });
+  await assert.rejects(f.plugin().apply(f.ctx), /DSH_SIWC_PRESET_CONTRACT_MISSING/);
+  assert.ok(!f.trace.includes('runtime') && !f.trace.includes('adapter'));
+  await f.dispose();
+});
+test('unload during pending preset reconciliation cannot create a late account runtime', async () => {
+  let release,
+    entered = false;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  const f = fixture({
+    version: '0.2.1-rc.2',
+    integration: async () => {
+      entered = true;
+      await gate;
+      return { assertCoverage() {} };
+    },
+  });
+  const applying = f.plugin().apply(f.ctx);
+  for (let i = 0; i < 50 && !entered; i++) await Promise.resolve();
+  assert.equal(entered, true);
+  await f.dispose();
+  release();
+  await applying;
+  assert.ok(!f.trace.includes('runtime') && !f.trace.includes('adapter'));
 });
