@@ -55,6 +55,8 @@ Only restart DSH after running tasks have finished. A window close may hide the 
 
 ### Use a reviewed archive
 
+For a clean/archive installation only. If the package is already linked to a checkout, keep it linked and use native `add -w` from the reviewed checkout instead; do not remove then install an archive over the Junction. See the [safe linked-update procedure](docs/install.md#updating-a-linked-checkout-safely).
+
 ```sh
 npm run pack
 npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.3.tgz

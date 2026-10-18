@@ -47,7 +47,19 @@ npm run test:race
 
 Quit the current desktop normally only after tasks finish; reopen the same installation after installation/removal. Complete sign-in yourself in Settings → Models. A callback on another machine cannot authorize this local Host.
 
+## Updating a linked checkout safely
+
+Perform provider deployment from an external terminal or an independent assistant, not a DSH conversation using that provider. Native profile changes can unload it immediately through HMR; an approved idle window must include the deploying conversation itself. Preserve code and rollback references first, finish active tasks, and agree on a normal Quit/reopen boundary.
+
+For an existing link, keep the same package owner and use the native `add -w` command from the reviewed checkout. Switching to a new reviewed checkout uses the same command from that directory. Verify the actual package version, canonical link target, selected bundle and loading diagnostics afterwards; neither exit code zero nor `application: applied` proves that a new package replaced a retained link. The CLI can also preserve an existing dependency's deselected bundle state; if the files updated but the source is still absent, enable that bundle through the native plugin manager and recheck loading. Do not invent a `plugin enable` CLI subcommand (the general plugin command forwards arguments to pnpm) or hand-edit the manifest.
+
+**Do not convert an existing Windows checkout Junction to an archive by removing it and then adding a tarball.** A disposable reproduction with Desktop 0.2.1-rc.2 and its bundled pnpm 11.28.5 retained the old link on the first archive add; remove left the Junction in place, and the next archive add deleted files in the linked source directory, including synthetic Git metadata. Native linked-to-linked replacement preserved both fixture sources, including when the dependency declaration said `file:` but the actual installation remained a link. This is evidence for that installed Windows tuple, not a macOS or future-release claim. Stop on an unfamiliar layout or failed check; do not patch the framework, manually rewrite profile files, or repeat destructive remove/add attempts.
+
+If a checkout is damaged, preserve its remaining objects/worktrees and recover into a separate complete repository before deployment. Do not repair Git metadata in place while experimenting with the installer. Archive conversion needs an upstream-safe, separately verified migration path.
+
 ## Archives
+
+Use this route only for a clean/archive installation with no existing checkout link for this package. See the linked-checkout warning above before replacing any existing installation.
 
 ```sh
 npm run pack

@@ -50,7 +50,7 @@ npm run dsh -- plugin --profile desktop add -w .
 
 任务结束后再通过 DSH 正常退出/重启。Windows 的关闭按钮可能仅隐藏到托盘。
 
-也可打包后安装：
+全新安装或原本就是压缩包安装时，也可打包后安装。**已有源码链接时，请保持链接，从已审查的源码目录运行原生 `add -w`；不要先移除再用压缩包覆盖 Windows Junction。** 当前已安装版本的隔离复现显示，这条转换路径可能删除链接目标的源码和 Git 元数据。部署应由外部终端或独立助手完成，不要让正在使用该订阅源的 DSH 会话卸载自己。详见[安全链接更新](docs/install.md#updating-a-linked-checkout-safely)。
 
 ```sh
 npm run pack

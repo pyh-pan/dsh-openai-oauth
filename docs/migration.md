@@ -15,12 +15,12 @@ If the profile already links `@pyh-pan/dsh-openai-oauth` to this checkout, keep 
 
 ## Safe switch
 
-1. Finish any active DSH tasks and inspect the existing bundle identity without dumping profiles/credential contents.
+1. Finish any active DSH tasks and inspect the existing bundle identity without dumping profiles/credential contents. The deploying conversation must not depend on the provider being removed: use an external terminal or independent assistant, because native HMR can unload the provider immediately.
 2. Keep rollback metadata outside this repository. Never copy credential files.
 3. Validate the new checkout and package first.
-4. Use the installed DSH CLI/plugin manager to remove the **old bundle only**, then add the new checkout/archive. Do not enable both simultaneously, manually edit profile files, or rename credential namespaces.
+4. For an existing same-package checkout link, use native `add -w` from the reviewed checkout without a remove/archive conversion; read the [Windows Junction warning](install.md#updating-a-linked-checkout-safely). For a genuinely different private owner, first verify its removal/install path in a disposable profile; only then use the installed DSH CLI/plugin manager to remove the **old bundle only**, then add the new reviewed reference. Do not enable both simultaneously, manually edit profile files, or rename credential namespaces.
 5. Quit/restart normally and verify one source, the saved account, original model selection, other providers, and unchanged settings.
-6. Roll back by removing the new bundle and reinstalling the previous reviewed package/reference if needed; leave grants intact.
+6. Roll back linked installations by native `add -w` from the saved reviewed checkout, not by remove followed by archive add. Other installation layouts need their independently verified native rollback path. Verify actual version, canonical target and enabled bundle, not just command success; leave grants intact.
 
 Do not restore a whole profile backup over user changes. Do not migrate fixed-client Codex grants into SIWC; old unrelated grants remain untouched and require independent consent to revoke.
 
