@@ -67,6 +67,18 @@ window.__ModuleLoader__.load({
       ACCOUNT_MISMATCH: '授权返回的账号与所选注册不一致，原凭据没有被替换。',
       DIRECT_PERMISSION_MISSING: '此账号未授予订阅推理权限，请显式选择“启用订阅推理”。',
       ACCOUNT_REAUTH_REQUIRED: '请重新授权此账号，或选择另一个已授权账号。',
+      AUTH_DNS_FAILED:
+        '无法解析 auth.openai.com，有限重试后仍失败。请检查 DNS 和网络；已有授权已保留。',
+      AUTH_CONNECT_FAILED:
+        '无法连接 auth.openai.com，有限重试后仍失败。请检查网络或代理；已有授权已保留。',
+      AUTH_TLS_FAILED:
+        '无法验证 auth.openai.com 的 TLS 证书。请检查系统时间和网络证书；未绕过证书校验。',
+      AUTH_NETWORK_FAILED:
+        '暂时无法读取 OpenAI 授权信息，有限重试后仍失败。请检查网络；已有授权已保留。',
+      AUTH_NETWORK_TIMEOUT:
+        '连接 OpenAI 授权服务超时。请检查 auth.openai.com 的可达性；已有授权已保留。',
+      AUTH_REQUEST_UNCONFIRMED:
+        '授权请求的连接中断，无法确认远端是否已处理。为避免重复轮换凭据，未自动重发；请在模型设置中确认账号状态。',
       VERSION_MISMATCH:
         '桌面 Host 尚未加载 SIWC 新版本。请重启 DSH 后再使用；没有启动旧 Codex 登录。',
     };
@@ -138,6 +150,18 @@ window.__ModuleLoader__.load({
       DIRECT_PERMISSION_MISSING:
         'ChatGPT plan use was not granted. Explicitly choose “Enable ChatGPT plan use”.',
       ACCOUNT_REAUTH_REQUIRED: 'Authorize this account again or choose another authorized account.',
+      AUTH_DNS_FAILED:
+        'Cannot resolve auth.openai.com after bounded retries. Check DNS and network access; existing authorization was kept.',
+      AUTH_CONNECT_FAILED:
+        'Cannot connect to auth.openai.com after bounded retries. Check network or proxy access; existing authorization was kept.',
+      AUTH_TLS_FAILED:
+        'Cannot verify TLS for auth.openai.com. Check the system clock and network certificates; verification was not bypassed.',
+      AUTH_NETWORK_FAILED:
+        'Cannot read OpenAI authorization metadata after bounded retries. Check network access; existing authorization was kept.',
+      AUTH_NETWORK_TIMEOUT:
+        'The OpenAI authorization network deadline expired. Check access to auth.openai.com; existing authorization was kept.',
+      AUTH_REQUEST_UNCONFIRMED:
+        'The authorization connection ended before confirmation. To avoid replaying a rotating credential, the request was not automatically resent; check the account status in model settings.',
       VERSION_MISMATCH:
         'The Host has not loaded the SIWC update. Restart DSH first; the legacy Codex sign-in was not started.',
     };

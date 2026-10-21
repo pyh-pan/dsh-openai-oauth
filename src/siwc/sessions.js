@@ -191,6 +191,13 @@ export class SessionManager {
                 ![
                   'NETWORK',
                   'NETWORK_TIMEOUT',
+                  'AUTH_DNS_FAILED',
+                  'AUTH_CONNECT_FAILED',
+                  'AUTH_NETWORK_FAILED',
+                  'AUTH_NETWORK_TIMEOUT',
+                  // Revocation is idempotent; unlike rotating refresh, a lost
+                  // revocation response may safely be retried within this deadline.
+                  'AUTH_REQUEST_UNCONFIRMED',
                   'REVOCATION_RETRYABLE',
                   'OIDC_DISCOVERY_FAILED',
                 ].includes(remoteError)

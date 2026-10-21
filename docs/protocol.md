@@ -24,6 +24,10 @@ The Host credentials namespace remains `chatgpt-subscription-login`. Account rec
 
 Refresh reads the newest rotating token inside the native cross-process lock, performs bounded network work and atomically commits it. Caller cancellation does not discard an already-started successful rotation. Terminal refresh failures clear tokens but retain registration; temporary errors retain the grant.
 
+Authorization transport has at most two attempts within one shared 12-second request budget, including its 100 ms retry delay. Discovery/JWKS reads may retry a transport failure once (never a TLS verification failure). Authorization-code exchange and rotating refresh retry only allowlisted DNS/connect failures that prove no connection was established; a reset, socket failure or unknown outcome is not automatically replayed. HTTP errors are not retried by this transport. A signal supplied to the protocol stops its dispatch/backoff, and late responses are cancelled. A rotating refresh already started inside `SessionManager` deliberately uses only its independent maintenance deadline: cancelling an inference wait does not cancel that transaction or discard a successful rotation. The existing 20-second total maintenance deadline still bounds each cross-process refresh transaction.
+
+Failures distinguish DNS, connect, TLS, deadline, metadata-read and unconfirmed-write outcomes using fixed non-secret codes and messages. Underlying exceptions, headers and token bodies are not logged. Temporary failures retain the saved grant; this does not claim that an unconfirmed remote rotation did not occur. Network recovery never disables TLS, overrides proxy settings, falls back to another origin/provider, or promises uninterrupted external connectivity.
+
 Sign-out attempts official revocation with bounded retries and then clears local tokens. Failure returns `REMOTE_REVOCATION_UNCONFIRMED`; local deletion alone is never reported as remote revocation. Other clients' grants are not touched.
 
 ## Stable session affinity

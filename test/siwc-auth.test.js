@@ -192,7 +192,7 @@ test('network errors and OAuth error descriptions never escape as messages', asy
       throw new Error('token=SHOULD_NOT_ESCAPE');
     },
   });
-  await assert.rejects(protocol.metadata(), errorCode('NETWORK'));
+  await assert.rejects(protocol.metadata(), errorCode('AUTH_NETWORK_FAILED'));
   const { protocol: rejected } = fixture({
     tokenResponse: () =>
       json({ error: 'invalid_grant', error_description: 'SHOULD_NOT_ESCAPE' }, 400),

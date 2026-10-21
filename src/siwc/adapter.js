@@ -1,4 +1,5 @@
 import { RESOURCE, SiwcError, boundedJson, reject } from './protocol.js';
+import { AUTH_NETWORK_MESSAGES } from './auth-network.js';
 import {
   createTimingTrace,
   normalizeRequestPolicy,
@@ -201,8 +202,8 @@ export function createAdapterClass({ LlmAdapter, LlmError, attributionHeaders })
               ? 'TIMEOUT'
               : 'ABORTED'
             : 'TRANSPORT';
-      const message = TIMEOUT_MESSAGES[rawCode];
-      const code = message ? 'TIMEOUT' : rawCode;
+      const message = TIMEOUT_MESSAGES[rawCode] ?? AUTH_NETWORK_MESSAGES[rawCode];
+      const code = TIMEOUT_MESSAGES[rawCode] ? 'TIMEOUT' : rawCode;
       return new LlmError(message ?? code, code);
     }
     #signal(signal) {
