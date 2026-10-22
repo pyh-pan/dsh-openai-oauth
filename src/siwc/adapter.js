@@ -1,6 +1,11 @@
 import { RESOURCE, SiwcError, boundedJson, reject } from './protocol.js';
 import { AUTH_NETWORK_MESSAGES } from './auth-network.js';
 import {
+  ATTACHMENT_MESSAGES,
+  attachmentCapabilities,
+  prepareAttachmentParts,
+} from './attachments.js';
+import {
   createTimingTrace,
   normalizeRequestPolicy,
   resolvedRetryPolicy,
@@ -123,7 +128,12 @@ async function requestJson(response, signal, maxBytes) {
 // The factory keeps wire tests independent of DSH packages. Production supplies
 // the real host exports: LlmAdapter, LlmError and attributionHeaders. It never
 // installs a replacement Llm service or imports another copy of pi-ai.
-export function createAdapterClass({ LlmAdapter, LlmError, attributionHeaders }) {
+export function createAdapterClass({
+  LlmAdapter,
+  LlmError,
+  attributionHeaders,
+  offloadedImageText,
+}) {
   return class ChatGPTSubscriptionAdapter extends LlmAdapter {
     #accounts;
     #sessions;
@@ -134,6 +144,8 @@ export function createAdapterClass({ LlmAdapter, LlmError, attributionHeaders })
     #policy;
     #logger;
     #timingNow;
+    #attachments;
+    #restoreFiles;
     constructor({
       accounts,
       sessions,
@@ -143,11 +155,15 @@ export function createAdapterClass({ LlmAdapter, LlmError, attributionHeaders })
       requestPolicy,
       logger,
       timingNow,
+      attachments,
+      restoreFiles,
     }) {
       super();
       this.#accounts = accounts;
       this.#sessions = sessions;
       this.#fetch = fetchImpl;
+      this.#attachments = attachments;
+      this.#restoreFiles = restoreFiles;
       this.now = now;
       // Retain the original offline fixture's idleTimeoutMs injection. Public
       // configuration has one owner/name: requestPolicy.streamIdleTimeoutMs.
@@ -158,6 +174,9 @@ export function createAdapterClass({ LlmAdapter, LlmError, attributionHeaders })
       );
       this.#logger = logger;
       this.#timingNow = timingNow;
+    }
+    #attachmentStore() {
+      return typeof this.#attachments === 'function' ? this.#attachments() : this.#attachments;
     }
     providerInfo(provider) {
       return { id: provider, name: 'ChatGPT Subscription' };
@@ -202,7 +221,8 @@ export function createAdapterClass({ LlmAdapter, LlmError, attributionHeaders })
               ? 'TIMEOUT'
               : 'ABORTED'
             : 'TRANSPORT';
-      const message = TIMEOUT_MESSAGES[rawCode] ?? AUTH_NETWORK_MESSAGES[rawCode];
+      const message =
+        TIMEOUT_MESSAGES[rawCode] ?? AUTH_NETWORK_MESSAGES[rawCode] ?? ATTACHMENT_MESSAGES[rawCode];
       const code = TIMEOUT_MESSAGES[rawCode] ? 'TIMEOUT' : rawCode;
       return new LlmError(message ?? code, code);
     }
@@ -334,8 +354,10 @@ export function createAdapterClass({ LlmAdapter, LlmError, attributionHeaders })
           if (!safeSlug(entry.slug) || ids.has(entry.slug)) reject('MODEL_CATALOG_INVALID', 502);
           ids.add(entry.slug);
           const reasoning = reasoningCapabilities(entry);
+          const attachment = attachmentCapabilities(entry, this.#attachmentStore());
           capabilities.set(entry.slug, {
             reasoningSummary: entry.supports_reasoning_summary_parameter === true,
+            ...attachment,
           });
           models.push({
             provider: PROVIDER,
@@ -344,9 +366,7 @@ export function createAdapterClass({ LlmAdapter, LlmError, attributionHeaders })
               typeof entry.display_name === 'string' && entry.display_name.length <= 256
                 ? entry.display_name
                 : entry.slug,
-            // This route deliberately advertises text-only until attachment
-            // projection is implemented and tested. DSH supplies safe placeholders.
-            inputModalities: ['text'],
+            ...(attachment.inputModalities ? { inputModalities: attachment.inputModalities } : {}),
             ...(reasoning ? { reasoning } : {}),
             ...(Number.isSafeInteger(entry.context_window) && entry.context_window > 0
               ? { context: { contextWindow: entry.context_window } }
@@ -400,7 +420,11 @@ export function createAdapterClass({ LlmAdapter, LlmError, attributionHeaders })
       try {
         const selection = await this.#selected(undefined, signal);
         const info = await this.#model(provider, model, selection, signal);
-        return { model: info, stream: (options) => this.#stream(options, selection) };
+        const capability = same(selection, this.#cache?.selection)
+          ? this.#cache.capabilities.get(model)
+          : undefined;
+        if (!capability) reject('MODEL_CATALOG_CHANGED', 409);
+        return { model: info, stream: (options) => this.#stream(options, selection, capability) };
       } catch (error) {
         throw this.#error(error, signal);
       }
@@ -421,20 +445,30 @@ export function createAdapterClass({ LlmAdapter, LlmError, attributionHeaders })
         };
       }
     }
-    async *#stream(options, selection) {
+    async *#stream(options, selection, capability) {
       let request, guarded, usage;
       let terminal = false;
       const trace = createTimingTrace(this.#policy, this.#logger, this.#timingNow);
       try {
-        this.#signal(options.signal).throwIfAborted();
+        const signal = this.#signal(options.signal);
+        signal.throwIfAborted();
         if (options.provider !== PROVIDER) reject('NO_ADAPTER');
-        const capability = same(selection, this.#cache?.selection)
-          ? this.#cache.capabilities.get(options.model)
-          : undefined;
-        const body = responsesBody(options, {
-          accountKey: selection.key,
-          reasoningSummary: capability?.reasoningSummary === true,
+        await this.#selected(selection, signal);
+        const messages = this.#restoreFiles?.(options) ?? options.messages;
+        const attachmentParts = await prepareAttachmentParts(messages, {
+          store: this.#attachmentStore(),
+          capabilities: capability,
+          signal,
+          offloadedText: offloadedImageText,
         });
+        const body = responsesBody(
+          { ...options, messages },
+          {
+            accountKey: selection.key,
+            reasoningSummary: capability.reasoningSummary === true,
+            attachmentParts,
+          },
+        );
         const affinity = sessionAffinity(options.sessionId, selection.key);
         request = await this.#request('responses', {
           selection,

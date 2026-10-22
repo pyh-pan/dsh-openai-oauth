@@ -123,7 +123,7 @@ export function sessionAffinity(sessionId, accountKey) {
   return `dsh_${digest(JSON.stringify([accountKey, sessionId]))}`;
 }
 
-export function responsesBody(options, { accountKey, reasoningSummary = false }) {
+export function responsesBody(options, { accountKey, reasoningSummary = false, attachmentParts }) {
   if (options.stop !== undefined) reject('UNSUPPORTED_OPTION');
   // The SIWC preview explicitly forbids these otherwise-standard API fields.
   // Reject explicit settings instead of silently pretending a limit was applied.
@@ -192,12 +192,27 @@ export function responsesBody(options, { accountKey, reasoningSummary = false })
       continue;
     }
     if (!['user', 'system', 'developer'].includes(message.role)) reject('UNSUPPORTED_CONTENT');
-    const text = asText(message.content);
-    if (text)
-      input.push({
-        role: message.role === 'system' ? 'developer' : message.role,
-        content: [{ type: 'input_text', text }],
+    const hasAttachments = message.content.some((block) => ['image', 'file'].includes(block.type));
+    if (hasAttachments && message.role !== 'user') reject('UNSUPPORTED_CONTENT');
+    if (hasAttachments) {
+      const content = message.content.flatMap((block) => {
+        if (block.type === 'text')
+          return block.text ? [{ type: 'input_text', text: block.text }] : [];
+        if (!['image', 'file'].includes(block.type)) reject('UNSUPPORTED_CONTENT');
+        const part = attachmentParts?.get(block);
+        if (!part) reject('UNSUPPORTED_CONTENT');
+        return [part];
       });
+      if (content.length) input.push({ role: 'user', content });
+    } else {
+      // Preserve the existing text-only wire shape and cache prefix exactly.
+      const text = asText(message.content);
+      if (text)
+        input.push({
+          role: message.role === 'system' ? 'developer' : message.role,
+          content: [{ type: 'input_text', text }],
+        });
+    }
   }
   const tools = options.tools?.map((tool) => {
     if (tool.deferLoading) reject('UNSUPPORTED_CONTENT');

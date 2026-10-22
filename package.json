@@ -1,6 +1,6 @@
 {
   "name": "@pyh-pan/dsh-openai-oauth",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "private": true,
   "description": "Independent Sign in with ChatGPT subscription provider for DeepSeek Harness Desktop.",
   "type": "module",

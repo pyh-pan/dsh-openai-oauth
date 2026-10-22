@@ -12,7 +12,7 @@ Independent community plugin; not affiliated with OpenAI or DeepSeek. This is **
 
 - Continue with ChatGPT, dynamic Agent registration, persistent host identity, and verified ID Tokens.
 - Account-specific models and reasoning levels in **DSH's existing model selector**.
-- Public Responses streaming, local function tools, tool results, and compatible history replay.
+- Public Responses streaming, verified image/document input, local function tools, tool results, and compatible history replay.
 - Multiple saved account/workspace registrations, explicit account selection, rotating refresh, and scoped sign-out.
 - Keeps DeepSeek Account, API-key providers, other sources, and existing sessions independent. No silent billing fallback.
 - Stable account/session-scoped Responses affinity for cache reuse, without sending raw session identifiers.
@@ -59,7 +59,7 @@ For a clean/archive installation only. If the package is already linked to a che
 
 ```sh
 npm run pack
-npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.4.tgz
+npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.5.tgz
 ```
 
 Do not keep the old private bundle and this bundle enabled simultaneously: they deliberately preserve the same provider/credential identity. See [migration](docs/migration.md).
@@ -78,7 +78,8 @@ Accounts without the granted direct-inference scope remain signed in but disable
 ## Limits and security
 
 - Models, reasoning choices and quota are account/server dependent, not an unlimited or universal model entitlement.
-- Currently advertises **text input** and client function tools. Direct image/file upload and hosted MCP/tool-search are not implemented.
+- Supports text, normalized images and supported documents through inline Responses input when accepted by the selected model. Local per-request limits include 20 images, 10 files, 20 MiB per file and 40 MiB total file bytes. See [attachment types, native contracts and verification boundaries](docs/attachments.md).
+- Audio/video, the Files upload API and hosted MCP/tool-search are not implemented. Unknown binary formats and over-limit history fail explicitly, rather than silently dropping attachments.
 - Explicit `maxTokens`/`temperature` remain rejected under this provider's conservative SIWC preview contract, not silently ignored; clear them before ordinary chat. DSH's built-in capped summarizer needs the separately reviewed [SIWC compaction replacement](docs/compaction.md)—updating this provider alone does not change a preset.
 - Subscription failures never switch to an API-key/balance provider.
 - Tokens stay in the native Host credentials service, not browser storage or ordinary plugin settings. Native local storage is not a promise of OS-keychain encryption.

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import { AUTH_NETWORK_MESSAGES } from '../src/siwc/auth-network.js';
+import { ATTACHMENT_MESSAGES } from '../src/siwc/attachments.js';
 
 const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 const source = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8');
@@ -90,6 +91,10 @@ test('client keeps native settings and model-directory hooks without switching t
       registrations[0].messages.en[code]?.includes('auth.openai.com') ||
         registrations[0].messages.en[code]?.includes('authorization'),
     );
+  }
+  for (const code of Object.keys(ATTACHMENT_MESSAGES)) {
+    assert.equal(typeof registrations[0].messages.zh[code], 'string');
+    assert.equal(typeof registrations[0].messages.en[code], 'string');
   }
   assert.deepEqual(
     slots.map((slot) => slot.name),

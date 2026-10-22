@@ -44,7 +44,7 @@ Version 0.3.1 was also checked inside an actual Windows/x64 DSH Desktop 0.2.1-rc
 
 `GET https://api.openai.com/v1/models` supplies the real account catalog. Only `visibility=list` entries are offered, in server order, retaining slugs. Catalog JSON has a separate 8 MiB limit because rich model metadata can exceed the smaller OAuth/discovery bound.
 
-Actual reasoning choices/defaults map into native Llm capability metadata; unsupported explicit choices fail. Summary is requested only when advertised supported. Input is currently text-only.
+Actual reasoning choices/defaults map into native Llm capability metadata; unsupported explicit choices fail. Summary is requested only when advertised supported. Text, verified image bytes and supported document bytes are sent inline; explicit modality exclusions are enforced and absent catalog facts stay unknown. Native structured file references survive the pre-adapter text projection through a request-scoped bridge, not path parsing. See [attachment contracts and limits](attachments.md).
 
 Inference uses public `POST /v1/responses`, `store:false`, `stream:true`; tools use the `dsh` namespace. No backend-api, fixed legacy Codex client, partner secret or billing fallback.
 
@@ -52,4 +52,4 @@ SSE is decoded strictly, independent of a generic/missing MIME label. Only succe
 
 Tool arguments/results and native encrypted reasoning/message phase can be replayed only for the same account/model and unedited durable contents. Cross-source or edited history degrades to safe visible text/tool history.
 
-Preview-incompatible `maxTokens` and `temperature` are rejected, not silently dropped. Attachment upload, hosted MCP and tool-search are not implemented.
+Preview-incompatible `maxTokens` and `temperature` are rejected, not silently dropped. Audio/video, the Files upload API, hosted MCP and tool-search are not implemented.
