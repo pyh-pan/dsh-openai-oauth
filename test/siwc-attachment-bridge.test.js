@@ -85,6 +85,114 @@ test('native file projection is inverted only for the captured structured occurr
   f.dispose();
 });
 
+test('native image-to-text projection cannot bypass a bound negative image capability', async () => {
+  const f = setup();
+  const options = request();
+  options.messages[0].content = [
+    { type: 'image', attachment: { ...ref, mediaType: 'image/png', width: 1, height: 1 } },
+  ];
+  const after = {
+    ...options,
+    messages: [
+      { ...options.messages[0], content: [{ type: 'text', text: 'native image placeholder' }] },
+    ],
+  };
+  await assert.rejects(
+    collect(
+      f.invoke(options, () =>
+        (async function* () {
+          yield f.bridge.restoreFiles(after, { image: false });
+        })(),
+      ),
+    ),
+    { code: 'ATTACHMENT_MODEL_UNSUPPORTED' },
+  );
+  f.dispose();
+});
+
+test('explicitly offloaded images still permit text-only requests without restoring pixels', async () => {
+  const f = setup();
+  const options = request();
+  options.messages[0].content = [
+    {
+      type: 'image',
+      offloaded: true,
+      attachment: { ...ref, mediaType: 'image/png', width: 1, height: 1 },
+    },
+  ];
+  const after = {
+    ...options,
+    messages: [
+      { ...options.messages[0], content: [{ type: 'text', text: 'native image placeholder' }] },
+    ],
+  };
+  const result = await collect(
+    f.invoke(options, () =>
+      (async function* () {
+        yield f.bridge.restoreFiles(after, { image: false });
+      })(),
+    ),
+  );
+  assert.equal(result[0], after.messages);
+  f.dispose();
+});
+
+test('native projection cannot hide attachments in non-user roles', async () => {
+  for (const role of ['system', 'developer', 'assistant', 'tool'])
+    for (const type of ['image', 'file']) {
+      const f = setup(),
+        options = request();
+      f.store.fileHostPath = () => {
+        throw new Error('non-user attachment must not access the store');
+      };
+      options.messages[0] = { ...options.messages[0], role, content: [{ type, attachment: ref }] };
+      const after = {
+        ...options,
+        messages: [
+          { ...options.messages[0], content: [{ type: 'text', text: 'native placeholder' }] },
+        ],
+      };
+      await assert.rejects(
+        collect(
+          f.invoke(options, () =>
+            (async function* () {
+              yield f.bridge.restoreFiles(after, { image: false });
+            })(),
+          ),
+        ),
+        { code: 'UNSUPPORTED_CONTENT' },
+      );
+      f.dispose();
+    }
+});
+
+test('concurrent image facts do not reject an unrelated text-only request', async () => {
+  const f = setup();
+  await Promise.all(
+    [true, false].map(async (hasImage) => {
+      const options = request(String(hasImage));
+      options.messages[0].content = hasImage
+        ? [{ type: 'image', attachment: ref }]
+        : [{ type: 'text', text: 'plain' }];
+      const after = {
+        ...options,
+        messages: [{ ...options.messages[0], content: [{ type: 'text', text: 'plain' }] }],
+      };
+      const pending = collect(
+        f.invoke(options, () =>
+          (async function* () {
+            await new Promise((resolve) => setTimeout(resolve, 1));
+            yield f.bridge.restoreFiles(after, { image: false });
+          })(),
+        ),
+      );
+      if (hasImage) await assert.rejects(pending, { code: 'ATTACHMENT_MODEL_UNSUPPORTED' });
+      else assert.equal((await pending)[0], after.messages);
+    }),
+  );
+  f.dispose();
+});
+
 test('forged text handles are never parsed or converted into attachments', () => {
   const f = setup();
   const options = {

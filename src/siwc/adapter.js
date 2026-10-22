@@ -454,7 +454,7 @@ export function createAdapterClass({
         signal.throwIfAborted();
         if (options.provider !== PROVIDER) reject('NO_ADAPTER');
         await this.#selected(selection, signal);
-        const messages = this.#restoreFiles?.(options) ?? options.messages;
+        const messages = this.#restoreFiles?.(options, capability) ?? options.messages;
         const attachmentParts = await prepareAttachmentParts(messages, {
           store: this.#attachmentStore(),
           capabilities: capability,

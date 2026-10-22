@@ -202,6 +202,72 @@ export async function verifyNativeAttachments(asar) {
     assert.equal(requests.at(-1).input[0].content[0].type, 'input_file');
     assert.equal((await collect('native-unknown', [user])).at(-1).reason.kind, 'stop');
     assert.equal(requests.at(-1).input[0].content[1].type, 'input_image');
+    const imageOnly = native.createUserMessage({
+      source: { kind: 'user' },
+      content: [{ type: 'image', attachment: image }],
+    });
+    const beforeNegative = requests.length;
+    const negative = await collect('native-text', [
+      imageOnly,
+      reply,
+      native.createUserMessage({
+        source: { kind: 'user' },
+        content: [{ type: 'text', text: 'follow up after model switch' }],
+      }),
+    ]);
+    assert.equal(
+      negative.at(-1).reason.kind,
+      'error',
+      'native text projection must not silently drop retained image input',
+    );
+    assert.equal(negative.at(-1).reason.failure.code, 'ATTACHMENT_MODEL_UNSUPPORTED');
+    assert.equal(
+      requests.length,
+      beforeNegative,
+      'negative image capability sends no Responses request',
+    );
+    const preparedNegative = await ctx.llm.prepareCall({
+      provider: PROVIDER,
+      model: 'native-text',
+    });
+    const preparedChunks = [];
+    for await (const chunk of preparedNegative.stream(
+      Object.freeze({
+        ...preparedNegative.config,
+        sessionId: 'native-prepared-negative',
+        messages: [imageOnly],
+      }),
+    ))
+      preparedChunks.push(chunk);
+    assert.equal(preparedChunks.at(-1).reason.failure.code, 'ATTACHMENT_MODEL_UNSUPPORTED');
+    assert.equal(
+      requests.length,
+      beforeNegative,
+      'prepared native dispatch also rejects before inference',
+    );
+    for (const [type, attachment] of [
+      ['image', image],
+      ['file', textFile],
+    ]) {
+      const nonUser = native.createAssistantMessage({
+        content: [{ type, attachment }],
+        source: { provider: PROVIDER, model: 'native-vision' },
+      });
+      const rejected = await collect('native-text', [nonUser]);
+      assert.equal(rejected.at(-1).reason.failure.code, 'UNSUPPORTED_CONTENT');
+      assert.equal(
+        requests.length,
+        beforeNegative,
+        'non-user attachments send no Responses request',
+      );
+    }
+    const offloaded = native.createUserMessage({
+      source: { kind: 'user' },
+      content: [{ type: 'image', attachment: image, offloaded: true }],
+    });
+    assert.equal((await collect('native-text', [offloaded])).at(-1).reason.kind, 'stop');
+    assert.equal(requests.at(-1).input[0].content[0].type, 'input_text');
+    assert.ok(!JSON.stringify(requests.at(-1)).includes('data:image/'));
     const abort = new AbortController();
     const variants = await Promise.all(
       ['ALPHA', 'BETA'].map(async (label) => {
@@ -240,6 +306,10 @@ export async function verifyNativeAttachments(asar) {
       nativeFileProjectionBridge: true,
       nativeAttachmentHistoryReplay: true,
       nativeUnknownModalityAccepted: true,
+      nativeNegativeImageCapabilityGuard: true,
+      nativePreparedNegativeImageCapabilityGuard: true,
+      nativeNonUserAttachmentGuard: true,
+      nativeOffloadedTextOnlyAccepted: true,
       nativeAttachmentScopeIsolation: true,
       nativeAttachmentIntegrityGuard: true,
     };

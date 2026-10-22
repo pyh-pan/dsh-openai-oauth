@@ -5,6 +5,8 @@ import { reject } from './protocol.js';
 // DSH intentionally projects file blocks to local-tool handles before adapter
 // dispatch. Capture ONLY admitted structured references at its public middleware
 // seam, then restore those exact occurrences, never discover paths from text.
+// Retained image facts must survive native text-only projection as well: that
+// projection must not bypass the adapter's bound negative capability check.
 export function createAttachmentBridge(ctx, native) {
   if (typeof ctx.get !== 'function' || typeof native.fileHandleText !== 'function')
     throw new Error('DSH_ATTACHMENT_CONTRACT_MISSING:fileHandleText/context.get');
@@ -23,10 +25,18 @@ export function createAttachmentBridge(ctx, native) {
   }
   function capture(options) {
     const files = new Map();
+    let hasRetainedImages = false;
+    let hasNonUserAttachments = false;
     for (const message of options.messages) {
-      if (message.role !== 'user') continue;
+      if (message.role !== 'user') {
+        hasNonUserAttachments ||= message.content.some((block) =>
+          ['image', 'file'].includes(block.type),
+        );
+        continue;
+      }
       const occurrences = [];
       for (const [index, block] of message.content.entries()) {
+        if (block.type === 'image' && block.offloaded !== true) hasRetainedImages = true;
         if (block.type === 'file')
           occurrences.push({ index, block, expected: expectedHandle(block.attachment) });
       }
@@ -41,6 +51,8 @@ export function createAttachmentBridge(ctx, native) {
       sessionId: options.sessionId,
       signal: options.signal,
       files,
+      hasRetainedImages,
+      hasNonUserAttachments,
     };
   }
   ctx.on('llm/stream', (options, next) => {
@@ -74,10 +86,14 @@ export function createAttachmentBridge(ctx, native) {
 
   return {
     store,
-    restoreFiles(options) {
+    restoreFiles(options, capabilities = {}) {
       if (closed) reject('PLUGIN_DISPOSED');
       const frame = scope.getStore();
-      if (!frame || frame.files.size === 0) return options.messages;
+      if (
+        !frame ||
+        (frame.files.size === 0 && !frame.hasRetainedImages && !frame.hasNonUserAttachments)
+      )
+        return options.messages;
       if (
         frame.provider !== options.provider ||
         frame.model !== options.model ||
@@ -85,6 +101,10 @@ export function createAttachmentBridge(ctx, native) {
         frame.signal !== options.signal
       )
         reject('ATTACHMENT_PROJECTION_CHANGED');
+      if (frame.hasNonUserAttachments) reject('UNSUPPORTED_CONTENT');
+      if (frame.hasRetainedImages && capabilities.image === false)
+        reject('ATTACHMENT_MODEL_UNSUPPORTED');
+      if (frame.files.size === 0) return options.messages;
       const seen = new Set();
       const messages = options.messages.map((message) => {
         const plan = frame.files.get(message.id);
