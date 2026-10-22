@@ -12,7 +12,7 @@
 
 - Continue with ChatGPT、动态 Agent 注册、持久化 host ID、完整 ID Token 校验。
 - 在 **DSH 原有模型选择器** 中选择账号实际可用的模型和推理档位。
-- 公开 Responses 流式输出、本地 function 工具、工具结果与兼容历史重放。
+- 公开 Responses 流式输出、校验后的图片/文档输入、本地 function 工具、工具结果与兼容历史重放。
 - 多账号/工作区注册隔离、显式选择账号、轮换刷新和限定退出。
 - 不覆盖 DeepSeek 账号/API 余额通道、其他源或现有会话，不静默切换计费源。
 - 透传按账号/持久会话派生的 Responses 缓存亲和标识，不明文发送原始会话身份。
@@ -54,7 +54,7 @@ npm run dsh -- plugin --profile desktop add -w .
 
 ```sh
 npm run pack
-npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.4.tgz
+npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.6.tgz
 ```
 
 不要同时启用原私有 bundle 和本项目：为保留既有授权，二者刻意使用同一 provider/凭据身份。切换步骤见 [迁移](docs/migration.md)。
@@ -73,8 +73,9 @@ npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth
 ## 限制与安全
 
 - 模型/推理档位/额度取决于账号与服务端，不保证无限额度或任意模型。
-- 当前声明文本输入与客户端 function 工具；未实现直接图片/文件上传及托管 MCP/tool-search。
-- 本适配器保留 SIWC 预览的保守参数契约：普通调用显式 `maxTokens`/`temperature` 仍明确报错，不假装生效。在 Desktop 0.2.1-rc.2 上，0.3.4 已将 [摘要兼容与逐会话覆盖保护](docs/compaction.md)统一集成到原插件，对 standard/cordis/ptc/minimal 在内存中适配，不写用户 preset，也不需要额外安装本地压缩 bundle。其他版本或自定义组合不会自动获得这项验证。
+- 支持所选模型可接受的文本、规范化图片与常见文档，通过 Responses 内联传入；不只是打开上传按钮。单次完整请求最多 20 张图片、10 个文件，每文件 20 MiB、文件合计 40 MiB。详见[附件类型、原生契约与验证边界](docs/attachments.md)。
+- 不支持音视频、Files 上传 API 或托管 MCP/tool-search。未知二进制格式、超限附件历史会明确报错，不静默丢弃。
+- 本适配器保留 SIWC 预览的保守参数契约：普通调用显式 `maxTokens`/`temperature` 仍明确报错，不假装生效。在 Desktop 0.2.1-rc.2 上，0.3.6 已将 [摘要兼容与逐会话覆盖保护](docs/compaction.md)统一集成到原插件，对 standard/cordis/ptc/minimal 在内存中适配，不写用户 preset，也不需要额外安装本地压缩 bundle。其他版本或自定义组合不会自动获得这项验证。
 - 失败不会回退到 API Key 或其他余额源。
 - Token 仅保存在宿主原生 credentials 服务，不进入浏览器存储或普通配置；不宣称本地文件等同系统钥匙串加密。
 - 退出先尝试远端撤销，再清本账号本地 Token、保留注册；远端未确认会明确报告，应在 ChatGPT 设置检查访问。

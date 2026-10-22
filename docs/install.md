@@ -49,7 +49,7 @@ npm run test:presets
 
 Quit the current desktop normally only after tasks finish; reopen the same installation after installation/removal. Complete sign-in yourself in Settings → Models. A callback on another machine cannot authorize this local Host.
 
-## Unified compaction in 0.3.4
+## Unified compaction in 0.3.6
 
 On Desktop 0.2.1-rc.2 the same provider package adapts supported native presets in memory and checks the actual retained session revision before Responses dispatch. It does not persist full preset snapshots. If the former `@local/dsh-siwc-compaction-compat` bundle is installed, migrate it through the native manager after validating the new main entry; do not keep it as an independent update dependency. See [migration and per-session verification](compaction.md#installation-and-migration-from-the-former-local-bundle). Verify the projected selected preset (including cordis), not merely a standard creation header or a visible model source.
 
@@ -69,7 +69,7 @@ Use this route only for a clean/archive installation with no existing checkout l
 
 ```sh
 npm run pack
-npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.4.tgz
+npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.6.tgz
 ```
 
 ## Missing source and authorization settings after a DSH upgrade

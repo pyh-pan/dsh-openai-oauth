@@ -1,4 +1,10 @@
 import { RESOURCE, SiwcError, boundedJson, reject } from './protocol.js';
+import { AUTH_NETWORK_MESSAGES } from './auth-network.js';
+import {
+  ATTACHMENT_MESSAGES,
+  attachmentCapabilities,
+  prepareAttachmentParts,
+} from './attachments.js';
 import {
   createTimingTrace,
   normalizeRequestPolicy,
@@ -122,7 +128,12 @@ async function requestJson(response, signal, maxBytes) {
 // The factory keeps wire tests independent of DSH packages. Production supplies
 // the real host exports: LlmAdapter, LlmError and attributionHeaders. It never
 // installs a replacement Llm service or imports another copy of pi-ai.
-export function createAdapterClass({ LlmAdapter, LlmError, attributionHeaders }) {
+export function createAdapterClass({
+  LlmAdapter,
+  LlmError,
+  attributionHeaders,
+  offloadedImageText,
+}) {
   return class ChatGPTSubscriptionAdapter extends LlmAdapter {
     #accounts;
     #sessions;
@@ -134,6 +145,8 @@ export function createAdapterClass({ LlmAdapter, LlmError, attributionHeaders })
     #logger;
     #timingNow;
     #assertCoverage;
+    #attachments;
+    #restoreFiles;
     constructor({
       accounts,
       sessions,
@@ -144,11 +157,15 @@ export function createAdapterClass({ LlmAdapter, LlmError, attributionHeaders })
       logger,
       timingNow,
       assertCoverage,
+      attachments,
+      restoreFiles,
     }) {
       super();
       this.#accounts = accounts;
       this.#sessions = sessions;
       this.#fetch = fetchImpl;
+      this.#attachments = attachments;
+      this.#restoreFiles = restoreFiles;
       this.now = now;
       // Retain the original offline fixture's idleTimeoutMs injection. Public
       // configuration has one owner/name: requestPolicy.streamIdleTimeoutMs.
@@ -160,6 +177,9 @@ export function createAdapterClass({ LlmAdapter, LlmError, attributionHeaders })
       this.#logger = logger;
       this.#timingNow = timingNow;
       this.#assertCoverage = assertCoverage;
+    }
+    #attachmentStore() {
+      return typeof this.#attachments === 'function' ? this.#attachments() : this.#attachments;
     }
     providerInfo(provider) {
       return { id: provider, name: 'ChatGPT Subscription' };
@@ -204,8 +224,9 @@ export function createAdapterClass({ LlmAdapter, LlmError, attributionHeaders })
               ? 'TIMEOUT'
               : 'ABORTED'
             : 'TRANSPORT';
-      const message = TIMEOUT_MESSAGES[rawCode];
-      const code = message ? 'TIMEOUT' : rawCode;
+      const message =
+        TIMEOUT_MESSAGES[rawCode] ?? AUTH_NETWORK_MESSAGES[rawCode] ?? ATTACHMENT_MESSAGES[rawCode];
+      const code = TIMEOUT_MESSAGES[rawCode] ? 'TIMEOUT' : rawCode;
       return new LlmError(message ?? code, code);
     }
     #signal(signal) {
@@ -217,7 +238,10 @@ export function createAdapterClass({ LlmAdapter, LlmError, attributionHeaders })
       if (expected && !same(selected, expected)) reject('ACCOUNT_CHANGED', 409);
       return selected;
     }
-    async #request(path, { selection, signal, body, stream = false, affinity, trace }) {
+    async #request(
+      path,
+      { selection, signal, body, stream = false, affinity, trace, sessionId, purpose },
+    ) {
       // Auth/selection are cancellable, but are not part of the historical
       // headers clock. Do not manufacture a host model-step total deadline.
       const lifetime = this.#signal(signal);
@@ -254,10 +278,13 @@ export function createAdapterClass({ LlmAdapter, LlmError, attributionHeaders })
         const serialized = body ? JSON.stringify(body) : undefined;
         trace?.('request-built', { requestBytes: serialized ? Buffer.byteLength(serialized) : 0 });
         combined.throwIfAborted();
-        trace?.('fetch-start');
         response = await withSignal(
-          () =>
-            this.#fetch(`${RESOURCE}/${path}`, {
+          () => {
+            // Refresh/selection can also yield after body construction. Check
+            // the retained composition again at the actual inference boundary.
+            if (path === 'responses') this.#assertCoverage?.(sessionId, purpose);
+            trace?.('fetch-start');
+            return this.#fetch(`${RESOURCE}/${path}`, {
               method: body ? 'POST' : 'GET',
               headers: {
                 ...attributionHeaders(),
@@ -272,7 +299,8 @@ export function createAdapterClass({ LlmAdapter, LlmError, attributionHeaders })
               ...(body ? { body: serialized } : {}),
               redirect: 'error',
               signal: combined,
-            }),
+            });
+          },
           combined,
           cancelBody,
         );
@@ -336,8 +364,10 @@ export function createAdapterClass({ LlmAdapter, LlmError, attributionHeaders })
           if (!safeSlug(entry.slug) || ids.has(entry.slug)) reject('MODEL_CATALOG_INVALID', 502);
           ids.add(entry.slug);
           const reasoning = reasoningCapabilities(entry);
+          const attachment = attachmentCapabilities(entry, this.#attachmentStore());
           capabilities.set(entry.slug, {
             reasoningSummary: entry.supports_reasoning_summary_parameter === true,
+            ...attachment,
           });
           models.push({
             provider: PROVIDER,
@@ -346,9 +376,7 @@ export function createAdapterClass({ LlmAdapter, LlmError, attributionHeaders })
               typeof entry.display_name === 'string' && entry.display_name.length <= 256
                 ? entry.display_name
                 : entry.slug,
-            // This route deliberately advertises text-only until attachment
-            // projection is implemented and tested. DSH supplies safe placeholders.
-            inputModalities: ['text'],
+            ...(attachment.inputModalities ? { inputModalities: attachment.inputModalities } : {}),
             ...(reasoning ? { reasoning } : {}),
             ...(Number.isSafeInteger(entry.context_window) && entry.context_window > 0
               ? { context: { contextWindow: entry.context_window } }
@@ -402,7 +430,11 @@ export function createAdapterClass({ LlmAdapter, LlmError, attributionHeaders })
       try {
         const selection = await this.#selected(undefined, signal);
         const info = await this.#model(provider, model, selection, signal);
-        return { model: info, stream: (options) => this.#stream(options, selection) };
+        const capability = same(selection, this.#cache?.selection)
+          ? this.#cache.capabilities.get(model)
+          : undefined;
+        if (!capability) reject('MODEL_CATALOG_CHANGED', 409);
+        return { model: info, stream: (options) => this.#stream(options, selection, capability) };
       } catch (error) {
         throw this.#error(error, signal);
       }
@@ -423,23 +455,35 @@ export function createAdapterClass({ LlmAdapter, LlmError, attributionHeaders })
         };
       }
     }
-    async *#stream(options, selection) {
+    async *#stream(options, selection, capability) {
       let request, guarded, usage;
       let terminal = false;
       const trace = createTimingTrace(this.#policy, this.#logger, this.#timingNow);
       try {
-        this.#signal(options.signal).throwIfAborted();
+        const signal = this.#signal(options.signal);
+        signal.throwIfAborted();
         if (options.provider !== PROVIDER) reject('NO_ADAPTER');
+        await this.#selected(selection, signal);
         // The native prepareCall path bypasses stream(), so admission belongs
-        // here too, before body projection and every Responses dispatch.
+        // here too, after the selection wait and before any history projection.
         this.#assertCoverage?.(options.sessionId, options.purpose);
-        const capability = same(selection, this.#cache?.selection)
-          ? this.#cache.capabilities.get(options.model)
-          : undefined;
-        const body = responsesBody(options, {
-          accountKey: selection.key,
-          reasoningSummary: capability?.reasoningSummary === true,
+        const messages = this.#restoreFiles?.(options, capability) ?? options.messages;
+        const attachmentParts = await prepareAttachmentParts(messages, {
+          store: this.#attachmentStore(),
+          capabilities: capability,
+          signal,
+          offloadedText: offloadedImageText,
         });
+        // Attachment I/O yields: do not reuse admission across that wait.
+        this.#assertCoverage?.(options.sessionId, options.purpose);
+        const body = responsesBody(
+          { ...options, messages },
+          {
+            accountKey: selection.key,
+            reasoningSummary: capability.reasoningSummary === true,
+            attachmentParts,
+          },
+        );
         const affinity = sessionAffinity(options.sessionId, selection.key);
         request = await this.#request('responses', {
           selection,
@@ -448,6 +492,8 @@ export function createAdapterClass({ LlmAdapter, LlmError, attributionHeaders })
           stream: true,
           affinity,
           trace,
+          sessionId: options.sessionId,
+          purpose: options.purpose,
         });
         // `stream:true` determines the wire protocol, not a proxy's MIME label.
         // Keep SSE framing/terminal validation; the wrapper only owns transport

@@ -1,4 +1,5 @@
 import { createHash, createPublicKey, timingSafeEqual, verify } from 'node:crypto';
+import { AuthNetworkError, requestAuth } from './auth-network.js';
 
 export const ISSUER = 'https://auth.openai.com';
 export const RESOURCE = 'https://api.openai.com/v1';
@@ -142,16 +143,10 @@ export class OpenAIProtocol {
     this.timeoutMs = timeoutMs;
   }
   async request(url, options = {}) {
-    const signal = options.signal
-      ? AbortSignal.any([options.signal, AbortSignal.timeout(this.timeoutMs)])
-      : AbortSignal.timeout(this.timeoutMs);
     try {
-      return await this.#fetch(url, { ...options, redirect: 'error', signal });
-    } catch {
-      reject(
-        options.signal?.aborted ? 'CANCELLED' : signal.aborted ? 'NETWORK_TIMEOUT' : 'NETWORK',
-        502,
-      );
+      return await requestAuth(this.#fetch, url, options, this.timeoutMs);
+    } catch (error) {
+      reject(error instanceof AuthNetworkError ? error.code : 'AUTH_NETWORK_FAILED', 502);
     }
   }
   async metadata(signal) {

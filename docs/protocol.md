@@ -24,6 +24,10 @@ The Host credentials namespace remains `chatgpt-subscription-login`. Account rec
 
 Refresh reads the newest rotating token inside the native cross-process lock, performs bounded network work and atomically commits it. Caller cancellation does not discard an already-started successful rotation. Terminal refresh failures clear tokens but retain registration; temporary errors retain the grant.
 
+Authorization transport has at most two attempts within one shared 12-second request budget, including its 100 ms retry delay. Discovery/JWKS reads may retry a transport failure once (never a TLS verification failure). Authorization-code exchange and rotating refresh retry only allowlisted DNS/connect failures that prove no connection was established; a reset, socket failure or unknown outcome is not automatically replayed. HTTP errors are not retried by this transport. A signal supplied to the protocol stops its dispatch/backoff, and late responses are cancelled. A rotating refresh already started inside `SessionManager` deliberately uses only its independent maintenance deadline: cancelling an inference wait does not cancel that transaction or discard a successful rotation. The existing 20-second total maintenance deadline still bounds each cross-process refresh transaction.
+
+Failures distinguish DNS, connect, TLS, deadline, metadata-read and unconfirmed-write outcomes using fixed non-secret codes and messages. Underlying exceptions, headers and token bodies are not logged. Temporary failures retain the saved grant; this does not claim that an unconfirmed remote rotation did not occur. Network recovery never disables TLS, overrides proxy settings, falls back to another origin/provider, or promises uninterrupted external connectivity.
+
 Sign-out attempts official revocation with bounded retries and then clears local tokens. Failure returns `REMOTE_REVOCATION_UNCONFIRMED`; local deletion alone is never reported as remote revocation. Other clients' grants are not touched.
 
 ## Stable session affinity
@@ -40,7 +44,7 @@ Version 0.3.1 was also checked inside an actual Windows/x64 DSH Desktop 0.2.1-rc
 
 `GET https://api.openai.com/v1/models` supplies the real account catalog. Only `visibility=list` entries are offered, in server order, retaining slugs. Catalog JSON has a separate 8 MiB limit because rich model metadata can exceed the smaller OAuth/discovery bound.
 
-Actual reasoning choices/defaults map into native Llm capability metadata; unsupported explicit choices fail. Summary is requested only when advertised supported. Input is currently text-only.
+Actual reasoning choices/defaults map into native Llm capability metadata; unsupported explicit choices fail. Summary is requested only when advertised supported. Text, verified image bytes and supported document bytes are sent inline; explicit modality exclusions are enforced and absent catalog facts stay unknown. Native structured file references survive the pre-adapter text projection through a request-scoped bridge, not path parsing. See [attachment contracts and limits](attachments.md).
 
 Inference uses public `POST /v1/responses`, `store:false`, `stream:true`; tools use the `dsh` namespace. No backend-api, fixed legacy Codex client, partner secret or billing fallback.
 
@@ -48,4 +52,4 @@ SSE is decoded strictly, independent of a generic/missing MIME label. Only succe
 
 Tool arguments/results and native encrypted reasoning/message phase can be replayed only for the same account/model and unedited durable contents. Cross-source or edited history degrades to safe visible text/tool history.
 
-Preview-incompatible `maxTokens` and `temperature` are rejected, not silently dropped. Attachment upload, hosted MCP and tool-search are not implemented.
+Preview-incompatible `maxTokens` and `temperature` are rejected, not silently dropped. Audio/video, the Files upload API, hosted MCP and tool-search are not implemented.

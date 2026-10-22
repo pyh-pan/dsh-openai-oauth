@@ -67,6 +67,30 @@ window.__ModuleLoader__.load({
       ACCOUNT_MISMATCH: '授权返回的账号与所选注册不一致，原凭据没有被替换。',
       DIRECT_PERMISSION_MISSING: '此账号未授予订阅推理权限，请显式选择“启用订阅推理”。',
       ACCOUNT_REAUTH_REQUIRED: '请重新授权此账号，或选择另一个已授权账号。',
+      AUTH_DNS_FAILED:
+        '无法解析 auth.openai.com，有限重试后仍失败。请检查 DNS 和网络；已有授权已保留。',
+      AUTH_CONNECT_FAILED:
+        '无法连接 auth.openai.com，有限重试后仍失败。请检查网络或代理；已有授权已保留。',
+      AUTH_TLS_FAILED:
+        '无法验证 auth.openai.com 的 TLS 证书。请检查系统时间和网络证书；未绕过证书校验。',
+      AUTH_NETWORK_FAILED:
+        '暂时无法读取 OpenAI 授权信息，有限重试后仍失败。请检查网络；已有授权已保留。',
+      AUTH_NETWORK_TIMEOUT:
+        '连接 OpenAI 授权服务超时。请检查 auth.openai.com 的可达性；已有授权已保留。',
+      AUTH_REQUEST_UNCONFIRMED:
+        '授权请求的连接中断，无法确认远端是否已处理。为避免重复轮换凭据，未自动重发；请在模型设置中确认账号状态。',
+      ATTACHMENT_SERVICE_UNAVAILABLE: '当前 DSH 无法提供已校验的附件字节，未发送附件。',
+      ATTACHMENT_REFERENCE_INVALID: '附件引用无效，请重新添加原文件。',
+      ATTACHMENT_READ_FAILED: '无法读取或校验已保存的附件，未发送推理请求。',
+      ATTACHMENT_READ_TIMEOUT: '本地附件准备超时，未发送推理请求。',
+      ATTACHMENT_CORRUPT: '附件内容与已保存的校验信息不一致，未发送推理请求。',
+      ATTACHMENT_TOO_LARGE: '附件历史超过数量或大小限制，请减少附件或新建会话。',
+      ATTACHMENT_FILE_TYPE_UNSUPPORTED:
+        '暂不支持将此文件格式直接传给模型，请改用受支持的文档格式或本地文件工具。',
+      ATTACHMENT_MODEL_UNSUPPORTED: '模型目录明确不支持此附件类型，请选择支持该输入的模型。',
+      ATTACHMENT_PROJECTION_CHANGED:
+        'DSH 原生附件投影契约发生变化，已停止发送，不会从聊天文本中猜测文件路径。',
+      MODEL_CATALOG_CHANGED: '模型目录在准备请求时发生变化，请重新加载模型目录后重试。',
       VERSION_MISMATCH:
         '桌面 Host 尚未加载 SIWC 新版本。请重启 DSH 后再使用；没有启动旧 Codex 登录。',
       coverageTitle: '会话安全覆盖',
@@ -157,6 +181,38 @@ window.__ModuleLoader__.load({
       DIRECT_PERMISSION_MISSING:
         'ChatGPT plan use was not granted. Explicitly choose “Enable ChatGPT plan use”.',
       ACCOUNT_REAUTH_REQUIRED: 'Authorize this account again or choose another authorized account.',
+      AUTH_DNS_FAILED:
+        'Cannot resolve auth.openai.com after bounded retries. Check DNS and network access; existing authorization was kept.',
+      AUTH_CONNECT_FAILED:
+        'Cannot connect to auth.openai.com after bounded retries. Check network or proxy access; existing authorization was kept.',
+      AUTH_TLS_FAILED:
+        'Cannot verify TLS for auth.openai.com. Check the system clock and network certificates; verification was not bypassed.',
+      AUTH_NETWORK_FAILED:
+        'Cannot read OpenAI authorization metadata after bounded retries. Check network access; existing authorization was kept.',
+      AUTH_NETWORK_TIMEOUT:
+        'The OpenAI authorization network deadline expired. Check access to auth.openai.com; existing authorization was kept.',
+      AUTH_REQUEST_UNCONFIRMED:
+        'The authorization connection ended before confirmation. To avoid replaying a rotating credential, the request was not automatically resent; check the account status in model settings.',
+      ATTACHMENT_SERVICE_UNAVAILABLE:
+        'This DSH runtime cannot supply verified attachment bytes. No attachment was sent.',
+      ATTACHMENT_REFERENCE_INVALID:
+        'The attachment reference is invalid. Attach the original file again.',
+      ATTACHMENT_READ_FAILED:
+        'The saved attachment could not be read or verified. No inference request was sent.',
+      ATTACHMENT_READ_TIMEOUT:
+        'Local attachment preparation timed out. No inference request was sent.',
+      ATTACHMENT_CORRUPT:
+        'Attachment bytes do not match their immutable reference. No inference request was sent.',
+      ATTACHMENT_TOO_LARGE:
+        'Attachment history exceeds this source’s count or byte limits. Reduce attachments or start a new conversation.',
+      ATTACHMENT_FILE_TYPE_UNSUPPORTED:
+        'This file format is not enabled for direct model input. Use a supported document format or local file tools.',
+      ATTACHMENT_MODEL_UNSUPPORTED:
+        'The model catalog explicitly excludes this attachment input type.',
+      ATTACHMENT_PROJECTION_CHANGED:
+        'The native file projection changed. Transmission stopped instead of guessing a path from chat text.',
+      MODEL_CATALOG_CHANGED:
+        'The model catalog changed during request preparation. Reload the catalog and retry.',
       VERSION_MISMATCH:
         'The Host has not loaded the SIWC update. Restart DSH first; the legacy Codex sign-in was not started.',
       coverageTitle: 'Session safety coverage',

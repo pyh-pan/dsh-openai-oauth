@@ -12,7 +12,7 @@ Independent community plugin; not affiliated with OpenAI or DeepSeek. This is **
 
 - Continue with ChatGPT, dynamic Agent registration, persistent host identity, and verified ID Tokens.
 - Account-specific models and reasoning levels in **DSH's existing model selector**.
-- Public Responses streaming, local function tools, tool results, and compatible history replay.
+- Public Responses streaming, verified image/document input, local function tools, tool results, and compatible history replay.
 - Multiple saved account/workspace registrations, explicit account selection, rotating refresh, and scoped sign-out.
 - Keeps DeepSeek Account, API-key providers, other sources, and existing sessions independent. No silent billing fallback.
 - Stable account/session-scoped Responses affinity for cache reuse, without sending raw session identifiers.
@@ -59,7 +59,7 @@ For a clean/archive installation only. If the package is already linked to a che
 
 ```sh
 npm run pack
-npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.4.tgz
+npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.6.tgz
 ```
 
 Do not keep the old private bundle and this bundle enabled simultaneously: they deliberately preserve the same provider/credential identity. See [migration](docs/migration.md).
@@ -78,8 +78,9 @@ Accounts without the granted direct-inference scope remain signed in but disable
 ## Limits and security
 
 - Models, reasoning choices and quota are account/server dependent, not an unlimited or universal model entitlement.
-- Currently advertises **text input** and client function tools. Direct image/file upload and hosted MCP/tool-search are not implemented.
-- Explicit `maxTokens`/`temperature` remain rejected under this provider's conservative SIWC preview contract, not silently ignored; clear them before ordinary chat. On Desktop 0.2.1-rc.2, 0.3.4 integrates [SIWC compaction and per-session coverage safety](docs/compaction.md) into the same provider bundle for standard/cordis/ptc/minimal, in memory without writing user presets. No separate local compatibility bundle is needed. Other runtime versions and custom compositions do not automatically acquire this validation.
+- Supports text, normalized images and supported documents through inline Responses input when accepted by the selected model. Local per-request limits include 20 images, 10 files, 20 MiB per file and 40 MiB total file bytes. See [attachment types, native contracts and verification boundaries](docs/attachments.md).
+- Audio/video, the Files upload API and hosted MCP/tool-search are not implemented. Unknown binary formats and over-limit history fail explicitly, rather than silently dropping attachments.
+- Explicit `maxTokens`/`temperature` remain rejected under this provider's conservative SIWC preview contract, not silently ignored; clear them before ordinary chat. On Desktop 0.2.1-rc.2, 0.3.6 integrates [SIWC compaction and per-session coverage safety](docs/compaction.md) into the same provider bundle for standard/cordis/ptc/minimal, in memory without writing user presets. No separate local compatibility bundle is needed. Other runtime versions and custom compositions do not automatically acquire this validation.
 - Subscription failures never switch to an API-key/balance provider.
 - Tokens stay in the native Host credentials service, not browser storage or ordinary plugin settings. Native local storage is not a promise of OS-keychain encryption.
 - Sign-out attempts remote revocation and clears this account's local tokens, retaining its registration. Unconfirmed remote revocation is reported; review access in ChatGPT settings.

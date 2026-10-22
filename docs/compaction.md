@@ -2,7 +2,7 @@
 
 ## One package and one update path
 
-Starting with **0.3.4**, Desktop **0.2.1-rc.2** integrates SIWC compaction from the ordinary `dsh-openai-oauth` provider entry. Do not install a second local configuration bundle for normal use. The `./compaction` export remains an internal module and a supported explicit composition building block; it is not a second provider or a separate account owner.
+Starting with **0.3.6**, Desktop **0.2.1-rc.2** integrates SIWC compaction from the ordinary `dsh-openai-oauth` provider entry. Do not install a second local configuration bundle for normal use. The `./compaction` export remains an internal module and a supported explicit composition building block; it is not a second provider or a separate account owner.
 
 The native basic summarizer passes a positive `maxTokens`, while this provider deliberately rejects that option for ordinary SIWC requests. Updating only the adapter's error labels never solved that contract conflict. The integrated implementation replaces the one basic backend inside each supported preset's **existing compaction isolation group**, retaining native range selection, tools/tail pairing, checkpoint transactions, persistence and shrink checks.
 
@@ -22,6 +22,8 @@ Every session-scoped Responses dispatch, including the native prepared-call path
 - its native `agentPreset` projection agrees with the exact composition it joined;
 - that retained composition has exactly one compatible backend, no remaining basic backend and no leaked root service;
 - the compatible instance supplies the safety contract, and a conversation request is not bypassing a recorded/transient failed-compaction state.
+
+Admission runs before attachment restoration/history projection, again after asynchronous attachment preparation, and at the actual Responses fetch after selection/authorization waits. Attachment reads or refresh waits cannot preserve a stale approval. Prepared calls retain their captured model capabilities; invalidating the catalog must not erase a negative image/file capability.
 
 The creation header alone is **not authoritative**. A header can say `standard` while a subsequent `agent-preset/selected` event and the live composition both say `cordis`. Children are checked against their inherited retained revision as well.
 
@@ -63,7 +65,7 @@ Inspect the failure and fix its cause at an idle boundary. Use a reviewed handof
 4. For an existing `@local/dsh-siwc-compaction-compat`, verify the new provider's four supported transformations first, then disable/remove **only that old local bundle** through the native manager/CLI. Preserve its reference outside the public repository for rollback. Do not edit profile package/lock/patch files manually.
 5. Restart normally with consent. Verify the actual provider version/canonical target, one provider owner, no separately selected local compatibility bundle, each supported native composition, and the exact revision of restored target sessions. Check the projected selected preset, not just a default or the frozen header. Keep accounts, current model and other providers unchanged.
 
-The legacy `prepare:compaction` tool is retained only for explicit/manual composition review and recovery. It is not the installation/update path for 0.3.4's automatic feature. Unknown/custom presets need contract review or an explicit compatible backend; they must not silently continue through an uncovered SIWC route.
+The legacy `prepare:compaction` tool is retained only for explicit/manual composition review and recovery. It is not the installation/update path for 0.3.6's automatic feature. Unknown/custom presets need contract review or an explicit compatible backend; they must not silently continue through an uncovered SIWC route.
 
 ## Request timeouts and private diagnostics
 
