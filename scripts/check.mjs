@@ -21,8 +21,16 @@ for (const file of files) {
   }
 }
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
-if (pkg.peerDependencies?.['@deepseek-ai/dsh-llm'] !== DSH_COMPATIBILITY_RANGE)
-  throw Error('Keep the Host peer constraint synchronized with the shared compatibility policy');
+for (const [name, range] of Object.entries(pkg.peerDependencies ?? {}))
+  if (name.startsWith('@deepseek-ai/dsh-') && range !== DSH_COMPATIBILITY_RANGE)
+    throw Error(`Keep the Host peer synchronized with the minimum policy: ${name}`);
+for (const file of files.filter((file) => file.startsWith('src/')))
+  if (
+    /(?:from\s*|import\s*\(?\s*)['"](?:node:child_process|[^'"]*scripts\/)/.test(
+      readFileSync(join(root, file), 'utf8'),
+    )
+  )
+    throw Error(`Production code must not import process/test helpers: ${file}`);
 for (const file of ['README.md', 'README.zh.md', 'docs/forward-compatibility.md'])
   if (!readFileSync(join(root, file), 'utf8').includes(DSH_COMPATIBILITY_RANGE))
     throw Error(`Documented compatibility range differs from shared policy: ${file}`);

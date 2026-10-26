@@ -63,8 +63,15 @@ export function createCompactionClass(
   { now = () => performance.now() } = {},
 ) {
   if (
-    typeof BasicCompactionEngine?.prototype?.summarize !== 'function' ||
+    !Array.isArray(BasicCompactionEngine?.inject) ||
+    !BasicCompactionEngine.inject.every((name) => typeof name === 'string') ||
+    ['summarize', 'compactIfNeeded', 'compactNow'].some(
+      (method) => typeof BasicCompactionEngine?.prototype?.[method] !== 'function',
+    ) ||
     typeof BlockAssembler !== 'function' ||
+    ['push', 'blocks'].some(
+      (method) => typeof BlockAssembler?.prototype?.[method] !== 'function',
+    ) ||
     typeof LlmError !== 'function'
   )
     throw fail('DSH_SIWC_COMPACTION_CONTRACT_MISSING');

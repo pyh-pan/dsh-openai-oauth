@@ -803,11 +803,24 @@ test('timing projection drops unrecognized stages, fields, usage and arbitrary e
 
 test('host validates policy before runtime creation and forwards exactly one public policy to adapter', async (t) => {
   let adapter,
+    route,
     runtimeCalls = 0;
   const dispose = [];
   const ctx = {
     credentials: { readRecord() {}, modifyRecord() {}, listRecords() {} },
-    connection: { fetch: { register() {} }, createSharedFetchHandler() {} },
+    connection: {
+      fetch: {
+        register(value) {
+          route = value;
+        },
+      },
+      createSharedFetchHandler: () => ({
+        fetch: async (request, peer) =>
+          peer.principal.kind === 'owner'
+            ? route.fetch(request)
+            : new Response(null, { status: 403 }),
+      }),
+    },
     llm: {
       registerAdapter(providers, value) {
         assert.deepEqual(providers, [PROVIDER]);

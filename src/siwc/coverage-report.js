@@ -12,7 +12,12 @@ const unavailable = () => ({
 // Owner-only settings diagnostics. Never serialize an Agent, module path,
 // condition, config, session id, account id, messages or arbitrary error.
 // Read outside plugin activation: native inventory may await Host settlement.
-export async function readCoverageReport(ctx, moduleName, timeoutMs = 2000) {
+export async function readCoverageReport(
+  ctx,
+  moduleName,
+  timeoutMs = 2000,
+  assertCoverage = (id, purpose) => assertSessionCoverage(ctx, id, moduleName, purpose),
+) {
   let timer;
   const started = performance.now();
   try {
@@ -36,10 +41,10 @@ export async function readCoverageReport(ctx, moduleName, timeoutMs = 2000) {
         if (route?.provider !== 'chatgpt-subscription') continue;
         sessions.checked++;
         try {
-          assertSessionCoverage(ctx, agent.id, moduleName, 'compaction');
+          assertCoverage(agent.id, 'compaction');
           sessions.covered++;
           try {
-            assertSessionCoverage(ctx, agent.id, moduleName);
+            assertCoverage(agent.id);
           } catch (error) {
             if (error?.code === 'SIWC_COMPACTION_REQUIRED') sessions.blocked++;
             else {

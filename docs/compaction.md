@@ -2,19 +2,21 @@
 
 ## One package and one update path
 
-Starting with **0.3.6**, Desktop **0.2.1-rc.2** integrates SIWC compaction from the ordinary `dsh-openai-oauth` provider entry. Do not install a second local configuration bundle for normal use. The `./compaction` export remains an internal module and a supported explicit composition building block; it is not a second provider or a separate account owner.
+Starting with **0.3.6**, the ordinary `dsh-openai-oauth` provider entry owns SIWC compaction. Version **0.3.7** removes the initial rc.2-only restriction and follows the actual Host Interfaces. Do not install a second local configuration bundle for normal use. The `./compaction` export remains an internal module and a supported explicit composition building block; it is not a second provider or a separate account owner.
 
 The native basic summarizer passes a positive `maxTokens`, while this provider deliberately rejects that option for ordinary SIWC requests. Updating only the adapter's error labels never solved that contract conflict. The integrated implementation replaces the one basic backend inside each supported preset's **existing compaction isolation group**, retaining native range selection, tools/tail pairing, checkpoint transactions, persistence and shrink checks.
 
-Automatic integration is behaviorally pinned to **Desktop 0.2.1-rc.2**. The provider's broader version range is not a validation claim for this hook. Historical validated runtimes retain the provider-only path; they do not gain this automatic compaction feature. Candidate startup/install checks include the real main-entry and preset suites; an unreviewed native hook fails those checks rather than acquiring validation from a matching version range.
+Automatic integration is shape-driven, not pinned to a release label. A deferred dependency lifecycle waits for the loader, preset registry, agents and session projections without making them hard account-provider dependencies. Missing, pending or failed integration denies session-scoped requests with a fixed diagnostic while account management remains available. Successful initialization still proves the actual retained composition before dispatch. Complete native suites are explicit development/release checks, never production startup dependencies.
+
+The registry inspection prefers `inspectCompositions`; the historical public retained-mount exports provide the same read-only inspection when that aggregate method is absent. Runtime-root membership and the current engine generation marker remain required. No compaction algorithm or transaction owner is copied or replaced. Platform evidence and limits are recorded in [compatibility.md](compatibility.md).
 
 ## Preserve declarations; inspect actual revisions
 
 The provider uses the installed Cordis `internal/config` waterfall for the exact native `AgentPreset` class. It transforms detached in-memory configurations for the known `standard`, `cordis`, `ptc` and `minimal` declarations. Already-loaded native declarations receive a public `Fiber.update(rawConfig, true)` (`noSave`) update. New declarations go through the same hook. No profile manifest, lockfile, user patch or full preset snapshot is written by this runtime integration. No framework method, module export or ASAR is patched.
 
-The transformation preserves the original preset identity, display metadata, unrelated plugins, native basic configuration, group isolation and expression nodes. It never evaluates child expressions itself. Ambiguous/duplicate owners, dynamic groups or unknown composition shapes are not rewritten. The former local compatibility backend is recognized idempotently during migration, without wrapping `basic` twice.
+The transformation preserves the original preset identity, display metadata, unrelated plugins (including additive ordinary rows in a known compaction group), native basic configuration, group isolation and expression nodes. It never evaluates child expressions itself. Ambiguous/duplicate owners, dynamic groups or unknown composition shapes are not rewritten. The former local compatibility backend is recognized idempotently during migration, without wrapping `basic` twice.
 
-Native registry revision retention still owns live Agents and children. An update does **not** forcibly rebind a running Agent. A 30-second startup bound and disposal signal prevent reconciliation from waiting forever or creating a late provider/account runtime after unload.
+Native registry revision retention still owns live Agents and children. An update does **not** forcibly rebind a running Agent. A 30-second reconciliation bound and disposal signal prevent indefinite waits or late session-protection activation after dependency unload. Account initialization does not wait for absent optional session services.
 
 Every session-scoped Responses dispatch, including the native prepared-call path, checks:
 
@@ -65,7 +67,7 @@ Inspect the failure and fix its cause at an idle boundary. Use a reviewed handof
 4. For an existing `@local/dsh-siwc-compaction-compat`, verify the new provider's four supported transformations first, then disable/remove **only that old local bundle** through the native manager/CLI. Preserve its reference outside the public repository for rollback. Do not edit profile package/lock/patch files manually.
 5. Restart normally with consent. Verify the actual provider version/canonical target, one provider owner, no separately selected local compatibility bundle, each supported native composition, and the exact revision of restored target sessions. Check the projected selected preset, not just a default or the frozen header. Keep accounts, current model and other providers unchanged.
 
-The legacy `prepare:compaction` tool is retained only for explicit/manual composition review and recovery. It is not the installation/update path for 0.3.6's automatic feature. Unknown/custom presets need contract review or an explicit compatible backend; they must not silently continue through an uncovered SIWC route.
+The legacy `prepare:compaction` tool is retained only for explicit/manual composition review and recovery. It is not the installation/update path for the automatic integration. Unknown/custom presets need contract review or an explicit compatible backend; they must not silently continue through an uncovered SIWC route.
 
 ## Request timeouts and private diagnostics
 
@@ -102,7 +104,7 @@ npm run test:compaction
 npm run test:presets
 ```
 
-The preset suite uses the installed native Loader, registry, real main entry and temporary credentials, with mock/denied transport. It covers all four presets, manual and automatic checkpoints/shrinkage, failed-operation admission, header/selection mismatch, restore, child inheritance, retained old revisions, future declarations, prepared-call admission and noSave cleanup. Pure tests additionally cover malformed/unknown declarations, migration idempotency and bounded startup/disposal. No real grant/history is read and no server inference is made.
+The preset suite uses the installed native Loader, registry, real main entry and temporary credentials, with mock/denied transport. It covers all four presets, manual and automatic checkpoints/shrinkage, failed-operation admission, header/selection mismatch, restore, child inheritance, retained old revisions, future declarations, prepared-call admission and noSave cleanup. Pure tests additionally cover malformed/unknown declarations, additive rows, migration idempotency, historical Interface Adapters and optional dependency lifecycle races. The real main-entry suite also repeats with only its release metadata changed to historical/future/missing labels; this proves version invariance, not those other binaries' compatibility. No real grant/history is read and no server inference is made.
 
 These checks are not proof of macOS GUI behavior, quota, large historic-session recovery or the impossibility of another network timeout. Real acceptance needs separate bounded approval. Start with small synthetic requests, no test retries, no full old history, and fail rather than expanding a budget automatically.
 

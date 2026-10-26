@@ -86,7 +86,7 @@ export async function verifyNativeAttachments(asar) {
           },
         };
       },
-      { verifyCandidate: async () => {} },
+      {},
     );
     await ctx.plugin(plugin);
     for (let i = 0; i < 100 && !accounts; i++)

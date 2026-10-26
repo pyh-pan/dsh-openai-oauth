@@ -48,6 +48,18 @@ test('one package adapts all supported presets without mutating or persisting th
     assert.deepEqual(raw, original);
   }
 });
+test('additive fields and unrelated plugins inside a known isolation group preserve compatibility', () => {
+  const raw = definition();
+  raw.futureMetadata = { enabled: true };
+  raw.plugins[1].config.push({ name: 'future-observer', config: { arbitraryNewField: true } });
+  const original = structuredClone(raw);
+  const result = adaptPresetDefinition(raw, moduleName);
+  assert.equal(result.supported, true);
+  assert.deepEqual(result.config.futureMetadata, original.futureMetadata);
+  assert.deepEqual(result.config.plugins[1].config.at(-1), original.plugins[1].config.at(-1));
+  assert.deepEqual(raw, original);
+});
+
 test('former local compat bundle and repeated config resolution do not double-wrap basic config', () => {
   const raw = definition();
   const owner = raw.plugins[1].config[0];
@@ -67,9 +79,9 @@ test('unknown/custom/dynamic/duplicate owners are never silently rewritten', () 
   const duplicate = definition();
   duplicate.plugins[1].config.push({ name: NATIVE_COMPACTION });
   fixtures.push(duplicate);
-  const unknown = definition();
-  unknown.plugins[1].config.push({ name: 'custom-transform' });
-  fixtures.push(unknown);
+  const nested = definition();
+  nested.plugins[1].config.push({ name: 'cordis:group', config: [] });
+  fixtures.push(nested);
   const disabled = definition();
   disabled.plugins[1].disabled = true;
   fixtures.push(disabled);

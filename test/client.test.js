@@ -8,20 +8,23 @@ import { ATTACHMENT_MESSAGES } from '../src/siwc/attachments.js';
 const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 const source = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8');
 
-function loadPlugin() {
+function loadPlugin(react = {}, globals = {}) {
   let plugin;
   runInNewContext(source, {
     window: {
+      addEventListener() {},
+      removeEventListener() {},
       __ModuleLoader__: {
         load({ id, factory }) {
           assert.equal(id, manifest.name);
           plugin = factory((name) => {
             assert.equal(name, 'react');
-            return {};
+            return react;
           });
         },
       },
     },
+    ...globals,
   });
   return plugin;
 }
@@ -39,7 +42,7 @@ test('client keeps native settings and model-directory hooks without switching t
   const slots = [];
   const localeBindings = [];
   const registrations = [];
-  const directory = { fixture: 'existing-session-directory' };
+  const directory = { fixture: 'existing-session-directory', subscribe() {}, getSnapshot() {} };
   const ctx = {
     effect(effect) {
       effect();
@@ -128,8 +131,92 @@ test('missing native client hooks produce named contract diagnostics', () => {
   }
   const target = ctx();
   target.inject = (_, callback) => callback({ modelDirectories: {} });
-  assert.throws(
-    () => loadPlugin().apply(target),
-    /DSH_CLIENT_CONTRACT_MISSING:modelDirectories.directoryFor/,
+  assert.doesNotThrow(() => loadPlugin().apply(target));
+  delete target.inject;
+  assert.doesNotThrow(() => loadPlugin().apply(target));
+});
+
+async function readCard(fetchImpl) {
+  const states = [],
+    effects = [];
+  let card;
+  const react = {
+    createElement: (type, props, ...children) => ({ type, props, children }),
+    useState(value) {
+      const i = states.length;
+      states.push(value);
+      return [
+        value,
+        (next) => {
+          states[i] = next;
+        },
+      ];
+    },
+    useRef: (current) => ({ current }),
+    useCallback: (fn) => fn,
+    useEffect: (fn) => {
+      effects.push(fn);
+    },
+  };
+  const plugin = loadPlugin(react, {
+    AbortController,
+    URL,
+    setTimeout,
+    clearTimeout,
+    fetch: fetchImpl,
+  });
+  plugin.apply({
+    effect: (fn) => fn(),
+    locale: { register() {}, bind: () => (key) => key },
+    slots: {
+      inject: (_name, fn) => fn(),
+      register: (_options, component) => {
+        card = component;
+      },
+    },
+  });
+  card({ t: (key) => key });
+  const cleanup = effects.map((fn) => fn());
+  for (let i = 0; i < 10; i++) await new Promise((resolve) => setImmediate(resolve));
+  for (const off of cleanup) off?.();
+  return { state: states[0], error: states[1] };
+}
+
+test('settings distinguishes an unloaded Host, access denial, startup and malformed responses from networking', async () => {
+  for (const [response, expected] of [
+    [new Response('not found', { status: 404 }), 'DSH_SOURCE_NOT_LOADED'],
+    [new Response('forbidden', { status: 403 }), 'DSH_SOURCE_ACCESS_DENIED'],
+    [Response.json({ error: 'DSH_PLUGIN_STARTING' }, { status: 503 }), 'DSH_PLUGIN_STARTING'],
+    [new Response('<html>upstream error</html>', { status: 503 }), 'DSH_SOURCE_RESPONSE_INVALID'],
+    [Response.json(null), 'DSH_SOURCE_RESPONSE_INVALID'],
+    [Response.json({ protocol: 'other' }), 'VERSION_MISMATCH'],
+    [
+      Response.json({ error: '/private/native/path' }, { status: 503 }),
+      'DSH_SOURCE_RESPONSE_INVALID',
+    ],
+  ]) {
+    const result = await readCard(async (url) => {
+      assert.equal(url, 'api/local-chatgpt-source');
+      return response;
+    });
+    assert.equal(result.error, expected);
+  }
+  assert.equal(
+    (
+      await readCard(async () => {
+        throw TypeError('private transport detail');
+      })
+    ).error,
+    'network',
   );
+  const result = await readCard(async () =>
+    Response.json({
+      provider: 'chatgpt-subscription',
+      protocol: 'siwc',
+      accounts: [],
+      futureField: true,
+    }),
+  );
+  assert.equal(result.error, '');
+  assert.equal(result.state.futureField, true);
 });

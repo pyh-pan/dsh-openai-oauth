@@ -1,57 +1,30 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  classifyDshVersion,
-  assertHostContract,
-  HOST_VERSION_FIELDS,
-} from '../src/compatibility.js';
-import { validateRunningCandidate } from '../src/desktop-preflight.js';
+import { classifyDshVersion, assertHostContract } from '../src/compatibility.js';
 import { createHostPlugin } from '../src/siwc/host.js';
 import { API_PATH, PROVIDER } from '../src/siwc/controller.js';
 
 for (const [expected, versions] of Object.entries({
   validated: ['0.2.0-rc.2', '0.2.1-rc.1', '0.2.1-rc.2'],
-  candidate: [
+  compatible: [
     '0.2.0-rc.2+rebuild',
-    '0.2.1-rc.3',
-    '0.2.1-rc.1.0',
-    '0.2.1-rc.999999999999999999999',
-    '0.2.1',
-    '0.2.1+build.7',
-    '0.2.2-alpha.1',
-    '0.2.2-beta.1',
-    '0.2.2-rc.1',
-    '0.2.9',
-    '0.2.99',
-  ],
-  unsupported: [
-    '0.2.0-rc.1',
     '0.2.0-rc.3',
     '0.2.0',
     '0.2.1-alpha.1',
-    '0.2.1-beta.3',
-    '0.2.1-rc',
-    '0.2.1-rc.0',
+    '0.2.1-rc.3',
+    '0.2.1-rc.999999999999999999999',
+    '0.2.2-alpha.1',
+    '0.2.99',
     '0.3.0-0',
-    '0.3.0-alpha.1',
     '0.3.0-rc.1',
     '0.3.0',
     '1.0.0',
-    'v0.2.1',
-    '0.02.1',
-    '0.2.01',
-    '0.2.1-rc.03',
-    '0.2.1+',
-    '0.2.1-rc..2',
-    '0.2.1\n',
-    '0.2.999999999999999999999',
-    '',
-    undefined,
-    null,
-    2,
+    '9.0.0',
   ],
+  unsupported: ['0.1.99', '0.2.0-alpha.1', '0.2.0-rc.1', '0.2.0-rc.1.9'],
+  unknown: ['nightly', '0.02.1', '0.2.1-rc.03', '0.2.1\n', '', undefined, null, 2],
 }))
-  test(`version policy distinguishes ${expected} releases without promoting candidates`, () => {
+  test(`release evidence distinguishes ${expected} without an upper admission limit`, () => {
     for (const version of versions)
       assert.equal(classifyDshVersion(version), expected, String(version));
   });
@@ -61,12 +34,12 @@ function fixture({
   denyGuests = true,
   denyOwners = false,
   stalled = false,
-  preflight = async () => {},
   integration,
+  connectionNative,
 } = {}) {
-  const trace = [];
-  const cleanup = [];
-  const routes = new Map();
+  const trace = [],
+    cleanup = [],
+    routes = new Map();
   const native = {
     APP_IDENTITY: { version },
     LlmAdapter: class {},
@@ -74,13 +47,14 @@ function fixture({
     attributionHeaders: () => ({ 'user-agent': 'DSH-test' }),
   };
   const forbidden = () => {
-    throw new Error('fixture credentials must not be accessed during startup');
+    throw Error('No credential access during admission');
   };
   const ctx = {
     effect(start) {
       cleanup.push(start());
     },
     on() {},
+    logger: { warn() {} },
     credentials: { readRecord: forbidden, listRecords: forbidden, modifyRecord: forbidden },
     llm: {
       registerAdapter(providers) {
@@ -126,50 +100,61 @@ function fixture({
           },
         };
       },
-      { verifyCandidate: preflight, installPresetIntegration: integration },
+      { installPresetIntegration: integration, connectionNative },
     );
   const dispose = async () => {
     for (const fn of cleanup) await fn();
   };
-  return { ctx, native, plugin, trace, dispose, routes };
+  const response = () => routes.get(API_PATH).fetch(new Request(`http://localhost${API_PATH}`));
+  return { ctx, native, plugin, trace, dispose, routes, response };
 }
 
-test('candidate startup verifies guest denial AND owner access before creating the account runtime', async (t) => {
-  t.mock.method(console, 'warn', () => {});
-  const f = fixture();
-  await f.plugin().apply(f.ctx);
-  assert.deepEqual(f.trace, [
-    'guest:GET',
-    'owner:GET',
-    'guest:POST',
-    'owner:POST',
-    'runtime',
-    'adapter',
-  ]);
-  assert.equal(console.warn.mock.calls.length, 1);
-  const response = await f.routes.get(API_PATH).fetch(new Request(`http://localhost${API_PATH}`));
-  assert.equal(response.status, 200);
-  assert.equal((await response.json()).protocol, 'siwc');
-  await f.dispose();
-  assert.equal(
-    (await f.routes.get(API_PATH).fetch(new Request(`http://localhost${API_PATH}`))).status,
-    410,
-  );
+test('changing only release metadata preserves owner admission, integration and provider registration', async () => {
+  for (const version of [
+    '0.2.0-rc.2',
+    '0.2.1-rc.2',
+    '0.2.1-rc.3',
+    '0.3.0-rc.1',
+    '1.0.0',
+    'nightly',
+    undefined,
+  ]) {
+    let f;
+    f = fixture({
+      version,
+      integration: async () => {
+        f.trace.push('integration');
+        return { assertCoverage() {} };
+      },
+    });
+    if (version === undefined) delete f.native.APP_IDENTITY;
+    await f.plugin().apply(f.ctx);
+    assert.deepEqual(
+      f.trace,
+      ['guest:GET', 'owner:GET', 'guest:POST', 'owner:POST', 'integration', 'runtime', 'adapter'],
+      String(version),
+    );
+    const response = await f.response();
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).protocol, 'siwc');
+    await f.dispose();
+    assert.equal((await f.response()).status, 410);
+  }
 });
 
-test('changed owner semantics fail closed without touching the account runtime or registering a provider', async () => {
+test('owner boundary failures remain inert and return a fixed JSON diagnostic', async () => {
   for (const options of [{ denyGuests: false }, { denyOwners: true }]) {
     const f = fixture(options);
     await assert.rejects(f.plugin().apply(f.ctx), /DSH_CONNECTION_OWNER_BOUNDARY_CHANGED/);
-    assert.ok(!f.trace.includes('runtime'));
-    assert.ok(!f.trace.includes('adapter'));
-    const response = await f.routes.get(API_PATH).fetch(new Request(`http://localhost${API_PATH}`));
+    assert.ok(!f.trace.includes('runtime') && !f.trace.includes('adapter'));
+    const response = await f.response();
     assert.equal(response.status, 503);
+    assert.deepEqual(await response.json(), { error: 'DSH_CONNECTION_OWNER_BOUNDARY_CHANGED' });
     await f.dispose();
   }
 });
 
-test('missing service methods and outside-family versions fail before route registration or account access', async () => {
+test('missing necessary methods and a proven below-floor Host fail before account access', async () => {
   for (const [service, method] of [
     ['credentials', 'readRecord'],
     ['credentials', 'modifyRecord'],
@@ -183,12 +168,12 @@ test('missing service methods and outside-family versions fail before route regi
     assert.equal(f.routes.size, 0);
     assert.deepEqual(f.trace, []);
   }
-  const f = fixture({ version: '0.3.0-rc.1' });
+  const f = fixture({ version: '0.2.0-rc.1' });
   await assert.rejects(f.plugin().apply(f.ctx), /UNSUPPORTED_DSH_VERSION/);
   assert.equal(f.routes.size, 0);
 });
 
-test('missing Llm exports produce a safe contract diagnostic, not a low-level subclass error', () => {
+test('necessary native exports and the actual Llm class identity are checked, not version equality', () => {
   for (const name of ['LlmAdapter', 'LlmError', 'attributionHeaders']) {
     const f = fixture();
     delete f.native[name];
@@ -196,12 +181,16 @@ test('missing Llm exports produce a safe contract diagnostic, not a low-level su
   }
   const f = fixture();
   delete f.native.APP_IDENTITY;
-  assert.throws(() => assertHostContract(f.native, f.ctx), /UNSUPPORTED_DSH_VERSION/);
+  assert.doesNotThrow(() => assertHostContract(f.native, f.ctx));
+  f.native.default = class Llm {};
+  assert.throws(() => assertHostContract(f.native, f.ctx), /llm.runtime-instance/);
+  Object.setPrototypeOf(f.ctx.llm, f.native.default.prototype);
+  assert.doesNotThrow(() => assertHostContract(f.native, f.ctx));
 });
 
-test('a stalled local owner probe times out without opening the runtime', async (t) => {
+test('a stalled owner probe is bounded without opening accounts', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
-  const f = fixture({ version: '0.2.1-rc.2', stalled: true });
+  const f = fixture({ stalled: true });
   const applying = f.plugin().apply(f.ctx);
   t.mock.timers.tick(5000);
   await assert.rejects(applying, /DSH_CONNECTION_OWNER_BOUNDARY_TIMEOUT/);
@@ -210,7 +199,7 @@ test('a stalled local owner probe times out without opening the runtime', async 
 });
 
 test('disposal during a pending owner probe cannot initialize a late account runtime', async () => {
-  const f = fixture({ version: '0.2.1-rc.2' });
+  const f = fixture();
   let release;
   f.ctx.connection.createSharedFetchHandler = () => ({
     fetch: () =>
@@ -225,107 +214,46 @@ test('disposal during a pending owner probe cannot initialize a late account run
   assert.deepEqual(f.trace, []);
 });
 
-test('the historical 0.2.0 baseline remains separate from the newer owner-carrier contract', async () => {
-  const f = fixture({ version: '0.2.0-rc.2' });
-  await f.plugin().apply(f.ctx);
-  assert.deepEqual(f.trace, ['runtime', 'adapter']);
-  await f.dispose();
-});
-
-test('direct-update candidates require successful isolated preflight before routes or real account runtime', async () => {
-  for (const preflight of [
-    null,
-    async () => {
-      throw new Error('DSH_CANDIDATE_NATIVE_CHECK_FAILED');
-    },
-  ]) {
-    const f = fixture({ preflight });
-    await assert.rejects(
-      f.plugin().apply(f.ctx),
-      /DSH_CANDIDATE_VALIDATION_REQUIRED|DSH_CANDIDATE_NATIVE_CHECK_FAILED/,
-    );
-    assert.equal(f.routes.size, 0);
-    assert.deepEqual(f.trace, []);
+test('the actual operator-only carrier remains supported independently of release labels', async () => {
+  class OperatorPeer {}
+  for (const version of ['0.2.0-rc.2', '0.3.0', undefined]) {
+    const f = fixture({ version, connectionNative: { OperatorPeer } });
+    f.ctx.connection.operator = new OperatorPeer();
+    f.ctx.connection.admit = () => ({ rejection: 401 });
+    f.ctx.connection.requestRejection = () => 401;
+    f.ctx.connection.createSharedFetchHandler = () => ({
+      fetch: (request) => f.routes.get(API_PATH).fetch(request),
+    });
+    await f.plugin().apply(f.ctx);
+    assert.ok(f.trace.includes('runtime') && f.trace.includes('adapter'));
     await f.dispose();
   }
 });
 
-test('unload while candidate preflight is pending never initializes the account runtime', async () => {
-  let release;
+test('a missing preset Interface blocks session coverage, not account settings', async () => {
   const f = fixture({
-    preflight: () =>
-      new Promise((resolve) => {
-        release = resolve;
-      }),
-  });
-  const applying = f.plugin().apply(f.ctx);
-  await f.dispose();
-  release();
-  await applying;
-  assert.equal(f.routes.size, 0);
-  assert.deepEqual(f.trace, []);
-});
-
-test('production candidate preflight pins the running executable and rejects installation/version drift', () => {
-  const info = (version) => ({
-    desktopVersion: version,
-    ...Object.fromEntries(HOST_VERSION_FIELDS.map((field) => [field, version])),
-    contractIssues: [],
-  });
-  const checked = [];
-  const host = { fixture: 'running-installation' };
-  const options = {
-    executable: 'D:\\Applications\\Harness.exe',
-    platform: 'win32',
-    find(input) {
-      assert.deepEqual(input, {
-        platform: 'win32',
-        env: { DSH_APP: 'D:\\Applications\\Harness.exe' },
-      });
-      return host;
-    },
-    inspect(input) {
-      assert.equal(input, host);
-      return info('0.2.2');
-    },
-    check(input) {
-      checked.push(input);
-    },
-  };
-  validateRunningCandidate('0.2.2', options);
-  assert.deepEqual(checked, [host]);
-  for (const metadataVersion of ['0.2.1-rc.2', '0.2.3', '0.3.0']) {
-    assert.throws(
-      () =>
-        validateRunningCandidate('0.2.2', {
-          ...options,
-          inspect: () => info(metadataVersion),
-        }),
-      /DSH_RUNNING_INSTALLATION_MISMATCH/,
-    );
-  }
-  assert.equal(checked.length, 1);
-});
-
-test('preset integration rejection cannot initialize accounts or register an adapter', async () => {
-  const f = fixture({
-    version: '0.2.1-rc.2',
     integration: async () => {
-      throw Error('DSH_SIWC_PRESET_CONTRACT_MISSING');
+      throw Error('PRIVATE_NATIVE_PATH');
     },
   });
-  await assert.rejects(f.plugin().apply(f.ctx), /DSH_SIWC_PRESET_CONTRACT_MISSING/);
-  assert.ok(!f.trace.includes('runtime') && !f.trace.includes('adapter'));
+  await f.plugin().apply(f.ctx);
+  assert.ok(f.trace.includes('adapter'));
+  const response = await f.response();
+  assert.equal(response.status, 200);
+  const state = await response.json();
+  assert.equal(state.coverage.status, 'unavailable');
+  assert.equal(state.coverage.code, 'DSH_SIWC_PRESET_CONTRACT_MISSING');
+  assert.ok(!JSON.stringify(state).includes('PRIVATE_NATIVE_PATH'));
   await f.dispose();
 });
-test('unload during pending preset reconciliation cannot create a late account runtime', async () => {
+
+test('unload during preset reconciliation cannot create a late runtime', async () => {
   let release,
     entered = false;
   const gate = new Promise((resolve) => {
     release = resolve;
   });
   const f = fixture({
-    version: '0.2.1-rc.2',
     integration: async () => {
       entered = true;
       await gate;

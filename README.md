@@ -20,15 +20,16 @@ Independent community plugin; not affiliated with OpenAI or DeepSeek. This is **
 
 ## Compatibility
 
-Validated Desktop releases: **0.2.1-rc.2, 0.2.1-rc.1 and 0.2.0-rc.2**. Development/install helpers require Node.js **24+**.
+Minimum Desktop requirement: `>=0.2.0-rc.2`. Development/install helpers require Node.js **24+**. Historical native baselines are **0.2.1-rc.2, 0.2.1-rc.1 and 0.2.0-rc.2**; current platform evidence is recorded below.
 
-Forward-eligible range: `0.2.0-rc.2 || >=0.2.1-rc.1 <0.3.0-0`. Later 0.2.x releases are **candidates, not validated releases**: installation and direct-update startup require isolated native checks before real-account activation. Next-minor prereleases/final, mixed components and failed contracts are rejected. See [forward compatibility](docs/forward-compatibility.md).
+New release labels do not require an allowlist entry or a startup test subprocess. Loading uses the minimum floor; actual Interfaces, owner authentication and session protection decide capability. Unknown metadata and different component version strings alone do not disable a working Host. A broad loading range is not certification of every future release. See [forward compatibility](docs/forward-compatibility.md).
 
 | Environment                                      | Status                                                                                         |
 | ------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
 | Windows Desktop 0.2.1-rc.2                       | Native suites pass; initial UI recovery confirmed; hardened-startup recheck pending            |
 | Windows Desktop 0.2.1-rc.1 (0.2.0-rc.2 baseline) | Previously validated native suites and desktop source/account/selection                        |
 | macOS Desktop 0.2.1-rc.2 / 0.2.1-rc.1            | Native and real desktop validation pending for these releases; 0.2.0-rc.2 native suites passed |
+| macOS Desktop 0.2.1-rc.3                         | All four isolated native suites pass; Desktop acceptance pending                               |
 | Windows/macOS/Linux Node CI                      | Protocol/package tests only; not proof of desktop login or inference                           |
 | Older DSH, remote/headless Hosts, Linux Desktop  | Not currently claimed supported                                                                |
 
@@ -59,7 +60,7 @@ For a clean/archive installation only. If the package is already linked to a che
 
 ```sh
 npm run pack
-npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.6.tgz
+npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.7.tgz
 ```
 
 Do not keep the old private bundle and this bundle enabled simultaneously: they deliberately preserve the same provider/credential identity. See [migration](docs/migration.md).
@@ -80,7 +81,7 @@ Accounts without the granted direct-inference scope remain signed in but disable
 - Models, reasoning choices and quota are account/server dependent, not an unlimited or universal model entitlement.
 - Supports text, normalized images and supported documents through inline Responses input when accepted by the selected model. Local per-request limits include 20 images, 10 files, 20 MiB per file and 40 MiB total file bytes. See [attachment types, native contracts and verification boundaries](docs/attachments.md).
 - Audio/video, the Files upload API and hosted MCP/tool-search are not implemented. Unknown binary formats and over-limit history fail explicitly, rather than silently dropping attachments.
-- Explicit `maxTokens`/`temperature` remain rejected under this provider's conservative SIWC preview contract, not silently ignored; clear them before ordinary chat. On Desktop 0.2.1-rc.2, 0.3.6 integrates [SIWC compaction and per-session coverage safety](docs/compaction.md) into the same provider bundle for standard/cordis/ptc/minimal, in memory without writing user presets. No separate local compatibility bundle is needed. Other runtime versions and custom compositions do not automatically acquire this validation.
+- Explicit `maxTokens`/`temperature` remain rejected under this provider's conservative SIWC preview contract, not silently ignored; clear them before ordinary chat. The same provider bundle integrates [SIWC compaction and per-session coverage safety](docs/compaction.md) for compatible standard/cordis/ptc/minimal declarations, in memory without writing user presets. No separate local compatibility bundle is needed. From 0.3.7 integration follows actual Host capabilities, not an exact release. Missing/pending protection blocks session requests without removing account settings; custom/uncovered compositions are not silently approved.
 - Subscription failures never switch to an API-key/balance provider.
 - Tokens stay in the native Host credentials service, not browser storage or ordinary plugin settings. Native local storage is not a promise of OS-keychain encryption.
 - Sign-out attempts remote revocation and clears this account's local tokens, retaining its registration. Unconfirmed remote revocation is reported; review access in ChatGPT settings.
@@ -95,11 +96,11 @@ npm run check
 npm run test:package
 npm run test:native
 npm run test:race
-npm run test:compaction # Desktop 0.2.1-rc.2 hook
+npm run test:compaction # installed native compaction contracts
 npm run test:presets    # real main entry + all supported preset realms
 ```
 
-Pure tests use generated identities and mock upstreams. Native tests use an installed DSH and **temporary** credentials; they do not read your grant or spend inference quota. Real-account desktop validation is separately documented and always user-controlled.
+Run these suites explicitly during development/release review; production startup and installation never spawn them just because a Host version changed. Pure tests use generated identities and mock upstreams. Native tests use an installed DSH and **temporary** credentials; they do not read your grant or spend inference quota. Real-account desktop validation is separately documented and always user-controlled.
 
 Source is published directly as ESM; no generated `lib/` or vendor snapshot is necessary. See [CONTRIBUTING.md](CONTRIBUTING.md).
 

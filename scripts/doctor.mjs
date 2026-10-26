@@ -5,6 +5,7 @@ import {
   SUPPORTED_DSH_VERSIONS,
   DSH_COMPATIBILITY_RANGE,
 } from './host.mjs';
+import { HOST_VERSION_FIELDS } from '../src/compatibility.js';
 try {
   const host = findDesktop();
   const info = readHostInfo(host);
@@ -18,7 +19,13 @@ try {
         reason: assessment.reason,
         validatedVersions: SUPPORTED_DSH_VERSIONS,
         eligibleRange: DSH_COMPATIBILITY_RANGE,
-        candidateNativeChecksRequired: assessment.status === 'candidate',
+        versionDifferences: HOST_VERSION_FIELDS.filter(
+          (field) =>
+            info[field] !== undefined &&
+            info.desktopVersion !== undefined &&
+            info[field] !== info.desktopVersion,
+        ),
+        startupNativeSuites: false,
         behaviorValidatedByDoctor: false,
         location: host.customLocation ? 'custom' : 'standard',
         credentialsInspected: false,

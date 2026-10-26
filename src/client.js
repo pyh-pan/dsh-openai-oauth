@@ -43,6 +43,21 @@ window.__ModuleLoader__.load({
       signedOnly: '已验证登录身份，但尚未允许使用 ChatGPT 订阅。可选择“启用订阅推理”继续。',
       failed: '操作未完成',
       network: '暂时无法连接桌面 Host，请稍后刷新。',
+      DSH_SOURCE_NOT_LOADED:
+        'Host 未注册订阅插件。请检查插件加载诊断；这不是授权过期，不要反复重新登录。',
+      DSH_SOURCE_ACCESS_DENIED: '桌面 Host 拒绝了管理请求，请检查原生连接身份。',
+      DSH_SOURCE_RESPONSE_INVALID: 'Host 返回了无法识别的管理响应，请检查插件加载与传输诊断。',
+      DSH_PLUGIN_STARTING: '订阅插件正在初始化，请稍后刷新。',
+      DSH_CONNECTION_OWNER_BOUNDARY_CHANGED:
+        'Host 管理路由的 owner 鉴权契约不满足，账号操作尚未启用。',
+      DSH_CONNECTION_OWNER_BOUNDARY_TIMEOUT: 'Host 管理路由检查未及时完成，账号操作尚未启用。',
+      DSH_HOST_CONTRACT_MISSING: 'Host 缺少订阅插件必需的 Interface，请运行 doctor 查看具体诊断。',
+      DSH_ADAPTER_HANDLE_CONTRACT_CHANGED: 'Host 的模型源注册契约发生变化，订阅模型源未启用。',
+      DSH_SIWC_PRESET_CONTRACT_MISSING:
+        'Host 的预设安全 Interface 尚未就绪，相关会话请求已阻止；账号设置仍可使用。',
+      DSH_SIWC_PRESET_STARTUP_TIMEOUT: '预设安全集成尚未完成，相关会话请求已阻止；请检查加载诊断。',
+      DSH_SIWC_COMPACTION_CONTRACT_MISSING:
+        'Host 的压缩 Interface 不满足安全集成要求，相关会话请求已阻止。',
       confirmTitle: '退出此账号？',
       confirmText:
         '会尝试撤销此注册实例的可续期会话，并清除此账号的本地 Token。不会撤销 Pi、DeepSeek 或其他账号的授权。',
@@ -152,6 +167,27 @@ window.__ModuleLoader__.load({
         'Identity verified, but ChatGPT plan use was not granted. Choose “Enable ChatGPT plan use” to continue.',
       failed: 'The operation did not complete',
       network: 'Cannot reach the desktop Host. Please refresh shortly.',
+      DSH_SOURCE_NOT_LOADED:
+        'The Host has not registered this source. Inspect plugin loading; do not reauthorize merely for this error.',
+      DSH_SOURCE_ACCESS_DENIED:
+        'The Host denied the management request. Check the native connection identity.',
+      DSH_SOURCE_RESPONSE_INVALID:
+        'The Host returned an unrecognized management response. Inspect plugin loading and transport.',
+      DSH_PLUGIN_STARTING: 'The source is initializing. Refresh shortly.',
+      DSH_CONNECTION_OWNER_BOUNDARY_CHANGED:
+        'The owner-only management route contract failed. Account operations remain disabled.',
+      DSH_CONNECTION_OWNER_BOUNDARY_TIMEOUT:
+        'The management route check timed out. Account operations remain disabled.',
+      DSH_HOST_CONTRACT_MISSING:
+        'A required Host Interface is missing. Run doctor for the named diagnostic.',
+      DSH_ADAPTER_HANDLE_CONTRACT_CHANGED:
+        'The Host provider-registration contract changed. This source is not enabled.',
+      DSH_SIWC_PRESET_CONTRACT_MISSING:
+        'The session-safety Interface is unavailable. Session dispatch is blocked; account settings remain available.',
+      DSH_SIWC_PRESET_STARTUP_TIMEOUT:
+        'Session-safety initialization did not finish. Session dispatch is blocked; inspect loading diagnostics.',
+      DSH_SIWC_COMPACTION_CONTRACT_MISSING:
+        'The native compaction Interface cannot supply the required protection. Session dispatch is blocked.',
       confirmTitle: 'Sign out of this account?',
       confirmText:
         'Attempts to revoke this registration’s renewable session and clears its local tokens. Pi, DeepSeek, and other saved accounts are not revoked.',
@@ -249,7 +285,8 @@ window.__ModuleLoader__.load({
 `;
     const code = (error) =>
       /^[A-Z0-9_]{1,64}$/.test(error?.message ?? '') ? error.message : 'network';
-    const errorText = (t, value) => (value in zh ? t(value) : `${t('failed')} (${value})`);
+    const errorText = (t, value) =>
+      Object.hasOwn(zh, value) ? t(value) : `${t('failed')} (${value})`;
     function useSource({ enabled = true, poll = 0 } = {}) {
       const [state, setState] = React.useState(null);
       const [error, setError] = React.useState('');
@@ -275,8 +312,22 @@ window.__ModuleLoader__.load({
                 : {}),
             },
           );
-          const data = await response.json();
-          if (!response.ok) throw new Error(data.error ?? 'network');
+          if (response.status === 404) throw new Error('DSH_SOURCE_NOT_LOADED');
+          if (response.status === 401 || response.status === 403)
+            throw new Error('DSH_SOURCE_ACCESS_DENIED');
+          let data;
+          try {
+            data = await response.json();
+          } catch {
+            throw new Error('DSH_SOURCE_RESPONSE_INVALID');
+          }
+          if (!data || typeof data !== 'object') throw new Error('DSH_SOURCE_RESPONSE_INVALID');
+          if (!response.ok)
+            throw new Error(
+              typeof data.error === 'string' && /^[A-Z0-9_]{1,64}$/.test(data.error)
+                ? data.error
+                : 'DSH_SOURCE_RESPONSE_INVALID',
+            );
           if (data.protocol !== 'siwc' || data.provider !== 'chatgpt-subscription')
             throw new Error('VERSION_MISMATCH');
           return data;
@@ -453,7 +504,11 @@ window.__ModuleLoader__.load({
         ),
         report.status === 'pending' && h('p', { className: 'cgs-muted' }, t('coveragePending')),
         report.status === 'unavailable' &&
-          h('p', { className: 'cgs-error' }, t('coverageUnavailable')),
+          h(
+            'p',
+            { className: 'cgs-error' },
+            t(Object.hasOwn(zh, report.code) ? report.code : 'coverageUnavailable'),
+          ),
         safetyCodes.includes(notice?.code) &&
           h('p', { className: 'cgs-error', role: 'alert' }, t(notice.code)),
       );
@@ -758,7 +813,7 @@ window.__ModuleLoader__.load({
           for (const method of methods)
             if (typeof ctx[service]?.[method] !== 'function')
               throw new Error(`DSH_CLIENT_CONTRACT_MISSING:${service}.${method}`);
-        for (const method of ['effect', 'inject'])
+        for (const method of ['effect'])
           if (typeof ctx[method] !== 'function')
             throw new Error(`DSH_CLIENT_CONTRACT_MISSING:context.${method}`);
         ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'chatgpt-subscription: locale');
@@ -773,24 +828,42 @@ window.__ModuleLoader__.load({
             Card,
           ),
         );
-        ctx.inject(['modelDirectories'], (scope) => {
-          if (typeof scope.modelDirectories?.directoryFor !== 'function')
-            throw new Error('DSH_CLIENT_CONTRACT_MISSING:modelDirectories.directoryFor');
-          scope.slots.inject('conversation.composer.dock', () =>
-            scope.slots.register(
-              {
-                name: 'conversation.composer.dock',
-                id: 'chatgpt-plan-usage',
-                order: 15,
-                inject: (sessionId) => ({
-                  directory: scope.modelDirectories.directoryFor(sessionId).store,
-                  t: ctx.locale.bind(NS),
-                }),
-              },
-              PlanBadge,
-            ),
-          );
-        });
+        if (typeof ctx.inject === 'function')
+          ctx.inject(['modelDirectories'], (scope) => {
+            if (typeof scope.modelDirectories?.directoryFor !== 'function') return;
+            const slots = scope.slots ?? ctx.slots;
+            if (typeof slots?.inject !== 'function' || typeof slots?.register !== 'function')
+              return;
+            const empty = {};
+            const emptyDirectory = { subscribe: () => () => {}, getSnapshot: () => empty };
+            const directoryFor = (sessionId) => {
+              try {
+                const directory = scope.modelDirectories.directoryFor(sessionId)?.store;
+                if (
+                  typeof directory?.subscribe === 'function' &&
+                  typeof directory?.getSnapshot === 'function'
+                )
+                  return directory;
+              } catch {
+                /* Optional model-directory display may be unavailable. */
+              }
+              return emptyDirectory;
+            };
+            slots.inject('conversation.composer.dock', () =>
+              slots.register(
+                {
+                  name: 'conversation.composer.dock',
+                  id: 'chatgpt-plan-usage',
+                  order: 15,
+                  inject: (sessionId) => ({
+                    directory: directoryFor(sessionId),
+                    t: ctx.locale.bind(NS),
+                  }),
+                },
+                PlanBadge,
+              ),
+            );
+          });
       },
     };
   },

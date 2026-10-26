@@ -1,37 +1,60 @@
 import { createAdapterClass } from './adapter.js';
 import { API_PATH, PROVIDER, SiwcController, createSiwcHandler } from './controller.js';
 import { OWNER, SELECTION_KEY } from './accounts.js';
-import { assertHostContract, nativeContractIssues } from '../compatibility.js';
+import {
+  assertHostContract,
+  nativeContractIssues,
+  isOperatorConnection,
+} from '../compatibility.js';
+import { unavailablePresetIntegration } from './preset-integration.js';
 import { createPluginConfig, normalizePluginConfig } from './request-policy.js';
 
-const starting = () => new Response('DSH_PLUGIN_STARTING', { status: 503 });
+const diagnostic = (error) =>
+  Response.json(
+    { error },
+    {
+      status: 503,
+      headers: { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' },
+    },
+  );
 
-// Probe only the actual management route's inert startup handler, in process.
-// No network, extra endpoint, account read, token write or upstream call occurs.
-async function assertOwnerBoundary(connection, isClosed) {
+// Inert, in-process probes of the actual management route. No account read,
+// credential write, network request or upstream call occurs.
+async function assertOwnerBoundary(connection, nativeConnection, isClosed) {
   let timer;
   try {
     await Promise.race([
       (async () => {
         const carrier = connection.createSharedFetchHandler('/api');
+        const operatorOnly = isOperatorConnection(connection, nativeConnection);
+        if (operatorOnly) {
+          for (const host of ['localhost', 'untrusted.invalid']) {
+            const admission = connection.admit({ headers: { host }, url: API_PATH, method: 'GET' });
+            if (![401, 403].includes(admission?.rejection)) throw Error();
+          }
+        }
         for (const method of ['GET', 'POST']) {
           const request = () =>
             new Request(`http://localhost${API_PATH}`, {
               method,
               ...(method === 'POST' ? { body: '{}' } : {}),
             });
-          const denied = await carrier.fetch(request(), {
-            id: 'siwc-startup-guest',
-            principal: { kind: 'guest' },
-          });
+          if (!operatorOnly) {
+            const denied = await carrier.fetch(request(), {
+              id: 'siwc-startup-guest',
+              principal: { kind: 'guest' },
+            });
+            if (isClosed()) return;
+            if (denied.status !== 403) throw Error();
+          }
+          const allowed = await carrier.fetch(
+            request(),
+            operatorOnly
+              ? connection.operator
+              : { id: 'siwc-startup-owner', principal: { kind: 'owner' } },
+          );
           if (isClosed()) return;
-          if (denied.status !== 403) throw Error();
-          const allowed = await carrier.fetch(request(), {
-            id: 'siwc-startup-owner',
-            principal: { kind: 'owner' },
-          });
-          if (isClosed()) return;
-          if (allowed.status !== 503 || (await allowed.text()) !== 'DSH_PLUGIN_STARTING')
+          if (allowed.status !== 503 || (await allowed.json()).error !== 'DSH_PLUGIN_STARTING')
             throw Error();
         }
       })(),
@@ -51,31 +74,27 @@ async function assertOwnerBoundary(connection, isClosed) {
   }
 }
 
-// Runtime factories must return protected host-side services, not UI data.
+// Runtime factories return protected host-side services, never UI data. Only
+// essential account/provider services are hard dependencies; session protection
+// owns its own lifecycle and denies uncovered session requests independently.
 export function createHostPlugin(
   native,
   createRuntime,
-  { verifyCandidate, Schema, installPresetIntegration } = {},
+  { Schema, installPresetIntegration, connectionNative } = {},
 ) {
   const issues = nativeContractIssues(native);
   if (issues.length) throw new Error(`DSH_HOST_CONTRACT_MISSING:${issues.join(',')}`);
   const Adapter = createAdapterClass(native);
   return {
     name: 'chatgpt-subscription-login',
-    inject: [
-      'connection',
-      'credentials',
-      'llm',
-      ...(installPresetIntegration
-        ? ['loader', 'agentPresets', 'agents', 'sessionProjections']
-        : []),
-    ],
+    inject: ['connection', 'credentials', 'llm'],
     ...(Schema ? { Config: createPluginConfig(Schema) } : {}),
     async apply(ctx, config) {
       const { requestPolicy } = normalizePluginConfig(config);
-      const compatibility = assertHostContract(native, ctx);
+      assertHostContract(native, ctx);
       let closed = false;
       let runtime, adapter, controller, handler;
+      let startupError = 'DSH_PLUGIN_STARTING';
       ctx.effect(
         () => async () => {
           closed = true;
@@ -86,29 +105,30 @@ export function createHostPlugin(
         'chatgpt-subscription: lifetime',
       );
       if (closed) return;
-      if (compatibility.status === 'candidate') {
-        if (typeof verifyCandidate !== 'function')
-          throw new Error('DSH_CANDIDATE_VALIDATION_REQUIRED');
-        await verifyCandidate(compatibility.version);
-        if (closed) return;
-      }
       ctx.connection.fetch.register({
         path: API_PATH,
         methods: ['GET', 'POST'],
         requestBody: 'buffered',
         fetch: (request) =>
-          closed ? new Response(null, { status: 410 }) : handler ? handler(request) : starting(),
+          closed
+            ? new Response(null, { status: 410 })
+            : handler
+              ? handler(request)
+              : diagnostic(startupError),
       });
-      // Preserve the separately validated legacy carrier. Every 0.2.1+ runtime,
-      // including candidates after a direct Desktop update, must enforce owner.
-      if (compatibility.version !== '0.2.0-rc.2')
-        await assertOwnerBoundary(ctx.connection, () => closed);
+      try {
+        await assertOwnerBoundary(ctx.connection, connectionNative, () => closed);
+      } catch (error) {
+        startupError = error.message;
+        throw error;
+      }
       if (closed) return;
-      if (compatibility.status === 'candidate')
-        console.warn(
-          `DSH_COMPATIBILITY_CANDIDATE:${compatibility.version}:local synthetic checks passed; not a validated release`,
-        );
-      const integration = await installPresetIntegration?.(ctx);
+      let integration;
+      try {
+        integration = await installPresetIntegration?.(ctx);
+      } catch (error) {
+        integration = unavailablePresetIntegration(error);
+      }
       if (closed) return;
       runtime = createRuntime(ctx);
       adapter = new Adapter({
@@ -118,8 +138,10 @@ export function createHostPlugin(
         assertCoverage: integration?.assertCoverage,
       });
       const handle = ctx.llm.registerAdapter([PROVIDER], adapter);
-      if (typeof handle?.replace !== 'function')
-        throw new Error('DSH_ADAPTER_HANDLE_CONTRACT_CHANGED');
+      if (typeof handle?.replace !== 'function') {
+        startupError = 'DSH_ADAPTER_HANDLE_CONTRACT_CHANGED';
+        throw new Error(startupError);
+      }
       const changed = () => {
         if (!closed) {
           adapter.invalidate();
@@ -140,7 +162,6 @@ export function createHostPlugin(
         runtime.controllerOptions,
       );
       handler = createSiwcHandler(controller);
-      // Rotating a token invalidates catalog metadata, not a running request.
       ctx.on('credentials/record-updated', async (key) => {
         if (key === SELECTION_KEY) {
           adapter.clearNotice();

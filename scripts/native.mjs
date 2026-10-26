@@ -27,15 +27,19 @@ try {
   });
   process.exitCode = result.status ?? 1;
   if (args.includes('--presets') && process.exitCode === 0) {
-    const bootstrap = spawnSync(
-      host.executable,
-      [
-        '--expose-internals',
-        fileURLToPath(new URL('./native-provider-bootstrap.mjs', import.meta.url)),
-      ],
-      { env: hostEnvironment(host), stdio: 'inherit', shell: false, timeout: 90000 },
-    );
-    process.exitCode = bootstrap.status ?? 1;
+    for (const label of [undefined, '0.2.0-rc.2', '0.3.0-rc.1', '1.0.0', 'missing']) {
+      const bootstrap = spawnSync(
+        host.executable,
+        [
+          '--expose-internals',
+          fileURLToPath(new URL('./native-provider-bootstrap.mjs', import.meta.url)),
+          ...(label === undefined ? [] : [`--version-label=${label}`]),
+        ],
+        { env: hostEnvironment(host), stdio: 'inherit', shell: false, timeout: 90000 },
+      );
+      process.exitCode = bootstrap.status ?? 1;
+      if (process.exitCode !== 0) break;
+    }
   }
 } catch (error) {
   console.error(error.message);

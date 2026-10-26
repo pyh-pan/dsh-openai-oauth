@@ -1,7 +1,7 @@
-// One policy for package metadata, install helpers and the production Host guard.
-// A candidate is eligible for contract testing, NOT evidence of a future release.
+// Evidence is not an admission whitelist. New release labels use the same contracts.
 export const VALIDATED_DSH_VERSIONS = ['0.2.0-rc.2', '0.2.1-rc.1', '0.2.1-rc.2'];
-export const DSH_COMPATIBILITY_RANGE = '0.2.0-rc.2 || >=0.2.1-rc.1 <0.3.0-0';
+export const MINIMUM_DSH_VERSION = '0.2.0-rc.2';
+export const DSH_COMPATIBILITY_RANGE = `>=${MINIMUM_DSH_VERSION}`;
 
 function parseVersion(value) {
   if (typeof value !== 'string' || value.length > 128) return;
@@ -17,34 +17,35 @@ function parseVersion(value) {
   return { major: numbers[0], minor: numbers[1], patch: numbers[2], pre };
 }
 
-// Compare just prerelease identifiers with rc.1, without coercing arbitrary-length
-// numeric identifiers to imprecise JS numbers. Release/build handling is separate.
-function atLeastRc1(pre) {
-  if (!pre) return true;
-  if (/^\d+$/.test(pre[0])) return false;
-  if (pre[0] !== 'rc') return pre[0] > 'rc';
-  if (pre.length < 2) return false;
-  if (!/^\d+$/.test(pre[1])) return true;
-  return pre[1] !== '0';
-}
-
 export function classifyDshVersion(version) {
   const parsed = parseVersion(version);
-  const eligible =
-    parsed?.major === 0 &&
-    parsed.minor === 2 &&
-    ((parsed.patch === 0 && parsed.pre?.join('.') === 'rc.2') ||
-      (parsed.patch === 1 && atLeastRc1(parsed.pre)) ||
-      parsed.patch > 1);
-  if (!eligible) return 'unsupported';
-  return VALIDATED_DSH_VERSIONS.includes(version) ? 'validated' : 'candidate';
+  // A metadata probe failure is not a broken Interface. Actual contracts still apply.
+  if (!parsed) return 'unknown';
+  const { major, minor, patch, pre } = parsed;
+  const aboveFloor =
+    major > 0 ||
+    (minor > 2 && major === 0) ||
+    (major === 0 &&
+      minor === 2 &&
+      (patch > 0 ||
+        !pre ||
+        pre[0] > 'rc' ||
+        (pre[0] === 'rc' &&
+          pre.length >= 2 &&
+          (!/^\d+$/.test(pre[1]) || pre[1].length > 1 || pre[1] >= '2'))));
+  if (!aboveFloor) return 'unsupported';
+  return VALIDATED_DSH_VERSIONS.includes(version) ? 'validated' : 'compatible';
 }
 
+// Diagnostics only: components may be versioned independently without changing contracts.
 export const HOST_VERSION_FIELDS = [
   'llmVersion',
   'credentialsVersion',
   'connectionVersion',
   'bootVersion',
+  'compactionVersion',
+  'presetVersion',
+  'presetRegistryVersion',
   'settingsModelsVersion',
   'modelSelectionVersion',
 ];
@@ -52,8 +53,6 @@ export const HOST_VERSION_FIELDS = [
 export function assessHost(info) {
   const status = classifyDshVersion(info.desktopVersion);
   if (status === 'unsupported') return { status, reason: 'UNSUPPORTED_DSH_VERSION' };
-  if (HOST_VERSION_FIELDS.some((field) => info[field] !== info.desktopVersion))
-    return { status: 'unsupported', reason: 'DSH_COMPONENT_VERSION_MISMATCH' };
   if (!Array.isArray(info.contractIssues) || info.contractIssues.length)
     return { status: 'unsupported', reason: 'DSH_HOST_CONTRACT_MISSING' };
   return { status, reason: null };
@@ -85,6 +84,23 @@ export function assertHostContract(native, ctx) {
   const status = classifyDshVersion(version);
   if (status === 'unsupported') throw new Error('UNSUPPORTED_DSH_VERSION');
   const issues = [...nativeContractIssues(native), ...serviceContractIssues(ctx)];
+  // Version equality cannot prove module identity; the actual service class can.
+  if (typeof native.default === 'function' && !(ctx.llm instanceof native.default))
+    issues.push('llm.runtime-instance');
   if (issues.length) throw new Error(`DSH_HOST_CONTRACT_MISSING:${issues.join(',')}`);
   return { version, status };
+}
+
+// The historical operator-only carrier predates principals. Recognize its real
+// exported class and admission Interface, never a release string or a bare flag.
+export function isOperatorConnection(connection, nativeConnection) {
+  return (
+    typeof nativeConnection?.OperatorPeer === 'function' &&
+    typeof nativeConnection.Peer !== 'function' &&
+    connection.operator instanceof nativeConnection.OperatorPeer &&
+    connection.operator.principal === undefined &&
+    typeof connection.createPeer !== 'function' &&
+    callable(connection, 'admit') &&
+    callable(connection, 'requestRejection')
+  );
 }

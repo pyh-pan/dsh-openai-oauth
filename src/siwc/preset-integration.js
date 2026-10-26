@@ -13,6 +13,52 @@ const failure = (code) => {
   throw new SiwcError(code);
 };
 
+export function unavailablePresetIntegration(error) {
+  const code =
+    [
+      'DSH_SIWC_PRESET_STARTUP_TIMEOUT',
+      'PLUGIN_DISPOSED',
+      'DSH_SIWC_COMPACTION_CONTRACT_MISSING',
+    ].find((code) => code === error?.code || code === error?.message) ??
+    'DSH_SIWC_PRESET_CONTRACT_MISSING';
+  return {
+    assertCoverage(sessionId) {
+      if (sessionId !== undefined) failure(code);
+    },
+    readCoverage: async () => ({
+      status: 'unavailable',
+      code,
+      presets: [],
+      sessions: { checked: 0, covered: 0, blocked: 0, uncovered: 0 },
+    }),
+  };
+}
+
+// Earlier registries export retained-mount readers instead of the aggregate
+// method. Both paths address the exact live revision through native public APIs.
+export function retainedCompositionReader(ctx, nativeRegistry = {}) {
+  if (typeof ctx.agentPresets?.inspectCompositions === 'function')
+    return ctx.agentPresets.inspectCompositions.bind(ctx.agentPresets);
+  const { standingMountFor, livePresetMounts, leakedServices } = nativeRegistry;
+  if (
+    [standingMountFor, livePresetMounts, leakedServices].some((read) => typeof read !== 'function')
+  )
+    failure('DSH_SIWC_PRESET_CONTRACT_MISSING');
+  return (agentCtx) => {
+    const mount = standingMountFor(agentCtx);
+    if (!mount) return [];
+    if (!livePresetMounts(ctx.root.fiber).includes(mount))
+      failure('DSH_SIWC_PRESET_CONTRACT_MISSING');
+    const modules = [];
+    for (const entry of mount.tree.entries()) {
+      if (entry.options.group || entry.disabled || entry.fiber?.state !== 2) continue;
+      if (typeof entry.options.name !== 'string') failure('DSH_SIWC_PRESET_CONTRACT_MISSING');
+      modules.push({ moduleName: entry.options.name });
+    }
+    return [{ id: mount.presetId, modules, leakedServices: leakedServices(ctx, mount.fiber) }];
+  };
+}
+
 // Adapt the native declaration IN MEMORY, before its own Config/registration.
 // Never mutate raw Loader options, evaluate child expressions, persist a patch,
 // replace a preset id or copy a user's declaration into this package.
@@ -36,17 +82,15 @@ export function adaptPresetDefinition(definition, moduleName) {
         const owners = row.config.filter((r) =>
           [NATIVE_COMPACTION, COMPAT_COMPACTION, moduleName].includes(r.name),
         );
-        const allowed = new Set([
-          NATIVE_COMPACTION,
-          COMPAT_COMPACTION,
-          moduleName,
-          '@deepseek-ai/dsh-command-compact',
-          '@deepseek-ai/dsh-compaction-tool-result-pruner',
-        ]);
+        // Additive plugins do not change the one recognized backend we adapt.
+        // The native registry still owns activation and realm conflicts; live
+        // admission proves the actual engine and retained composition again.
         if (
           owners.length !== 1 ||
           owners[0].disabled ||
-          row.config.some((r) => !allowed.has(r.name))
+          row.config.some(
+            (r) => !plain(r) || typeof r.name !== 'string' || r.name === 'cordis:group',
+          )
         )
           throw Error();
         const owner = owners[0];
@@ -82,15 +126,15 @@ export function adaptPresetDefinition(definition, moduleName) {
 
 // Exact live revision + durable selected-preset projection, NOT creation header.
 // Calls lacking session identity remain ordinary standalone provider calls.
-export function assertSessionCoverage(ctx, sessionId, moduleName, purpose) {
+export function assertSessionCoverage(ctx, sessionId, moduleName, purpose, inspectCompositions) {
   try {
-    return checkSessionCoverage(ctx, sessionId, moduleName, purpose);
+    return checkSessionCoverage(ctx, sessionId, moduleName, purpose, inspectCompositions);
   } catch (error) {
     if (error instanceof SiwcError) throw error;
     failure('DSH_SIWC_PRESET_CONTRACT_MISSING');
   }
 }
-function checkSessionCoverage(ctx, sessionId, moduleName, purpose) {
+function checkSessionCoverage(ctx, sessionId, moduleName, purpose, inspectCompositions) {
   if (sessionId === undefined) return;
   const agent = ctx.agents.get(sessionId);
   if (!agent) failure('SIWC_SESSION_COVERAGE_UNAVAILABLE');
@@ -98,7 +142,9 @@ function checkSessionCoverage(ctx, sessionId, moduleName, purpose) {
   const composed = registry.composedPreset(agent.ctx);
   const selected = ctx.sessionProjections.stateOf(agent.session, 'agentPreset');
   if (!composed || selected !== composed) failure('SIWC_PRESET_REVISION_MISMATCH');
-  const inspected = registry.inspectCompositions(agent.ctx);
+  const inspected = inspectCompositions
+    ? inspectCompositions(agent.ctx)
+    : registry.inspectCompositions(agent.ctx);
   const engine = registry.serviceFor(agent, 'compaction');
   if (
     inspected.length !== 1 ||
@@ -129,16 +175,16 @@ function checkSessionCoverage(ctx, sessionId, moduleName, purpose) {
   }
 }
 
-export async function installPresetIntegration(ctx, NativePreset, moduleName) {
+export async function installPresetIntegration(ctx, NativePreset, moduleName, inspectCompositions) {
   if (
     typeof NativePreset !== 'function' ||
     typeof moduleName !== 'string' ||
     !moduleName.startsWith('file:') ||
     typeof ctx.loader?.entries !== 'function' ||
     typeof ctx.agents?.get !== 'function' ||
-    ['composedPreset', 'inspectCompositions', 'serviceFor'].some(
-      (k) => typeof ctx.agentPresets?.[k] !== 'function',
-    ) ||
+    ['composedPreset', 'serviceFor'].some((k) => typeof ctx.agentPresets?.[k] !== 'function') ||
+    (typeof inspectCompositions !== 'function' &&
+      typeof ctx.agentPresets?.inspectCompositions !== 'function') ||
     typeof ctx.sessionProjections?.stateOf !== 'function'
   )
     failure('DSH_SIWC_PRESET_CONTRACT_MISSING');
@@ -226,7 +272,7 @@ export async function installPresetIntegration(ctx, NativePreset, moduleName) {
   return {
     assertCoverage: (sessionId, purpose) => {
       if (closed) failure('PLUGIN_DISPOSED');
-      assertSessionCoverage(ctx, sessionId, moduleName, purpose);
+      assertSessionCoverage(ctx, sessionId, moduleName, purpose, inspectCompositions);
     },
   };
 }

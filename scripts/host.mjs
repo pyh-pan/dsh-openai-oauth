@@ -121,42 +121,10 @@ export function inspectHost(host, options) {
   return info;
 }
 
-export function runCandidateChecks(host, { spawn = spawnSync } = {}) {
-  // No real profiles, credentials or upstreams: these scripts use disposable
-  // stores. This is shared by installation and direct Desktop-update startup.
-  for (const script of [
-    'native-siwc.mjs',
-    'native-session-race.mjs',
-    'native-preset-integration.mjs',
-    'native-provider-bootstrap.mjs',
-  ]) {
-    const checked = spawn(host.executable, ['--expose-internals', join(scripts, script)], {
-      env: hostEnvironment(host),
-      stdio: 'inherit',
-      shell: false,
-      timeout: 90000,
-    });
-    if (checked.status !== 0) fail('DSH_CANDIDATE_NATIVE_CHECK_FAILED');
-  }
-}
-
-function isNativeRemoval(args) {
-  if (args[0] !== 'plugin') return false;
-  let index = 1;
-  while (index < args.length) {
-    if (args[index] === '--profile' && args[index + 1]) index += 2;
-    else if (args[index].startsWith('--profile=')) index++;
-    else break;
-  }
-  return args[index] === 'remove';
-}
-
 export function invokeCli(host, args, { spawn = spawnSync } = {}) {
-  const info = inspectHost(host, { spawn });
-  // A failed candidate must still be removable through the native manager.
-  // Never infer a command from an arbitrary argument/package named "remove".
-  if (assessHost(info).status === 'candidate' && !isNativeRemoval(args))
-    runCandidateChecks(host, { spawn });
+  // Native suites are explicit development/release checks, never installer or
+  // provider activation dependencies. The installed manager owns profile writes.
+  inspectHost(host, { spawn });
   const result = spawn(host.executable, ['--expose-internals', host.cli, ...args], {
     env: hostEnvironment(host),
     stdio: 'inherit',

@@ -15,6 +15,8 @@ const req = createRequire(pathToFileURL(join(asar, 'dsh/package.json')));
 const peers = new Map(
   [
     '@deepseek-ai/dsh-agent-preset',
+    '@deepseek-ai/dsh-agent-preset-registry',
+    '@deepseek-ai/dsh-client-connection',
     '@deepseek-ai/dsh-compaction-basic',
     '@deepseek-ai/dsh-compaction-basic/package.json',
     '@deepseek-ai/dsh-llm',
@@ -22,6 +24,19 @@ const peers = new Map(
     'zod',
   ].map((n) => [n, pathToFileURL(req.resolve(n)).href]),
 );
+const args = process.argv.slice(2);
+if (args.length > 1 || args.some((arg) => !arg.startsWith('--version-label=')))
+  throw Error('Unknown bootstrap fixture argument');
+const versionLabel = args[0]?.slice('--version-label='.length);
+if (versionLabel !== undefined) {
+  const realLlm = peers.get('@deepseek-ai/dsh-llm');
+  const identity =
+    versionLabel === 'missing' ? 'undefined' : JSON.stringify({ version: versionLabel });
+  // Fixture-only wrapper: all real classes/functions retain their identity.
+  // Neither installed metadata nor source is changed; these are NOT new binaries.
+  const source = `export * from ${JSON.stringify(realLlm)}; export { default } from ${JSON.stringify(realLlm)}; export const APP_IDENTITY = ${identity};`;
+  peers.set('@deepseek-ai/dsh-llm', 'data:text/javascript,' + encodeURIComponent(source));
+}
 const hook = registerHooks({
   resolve(s, c, next) {
     return !c.conditions.includes('require') && peers.has(s)
@@ -149,8 +164,17 @@ try {
   await ctx.loader.await();
   const provider = await ctx.plugin(production);
   assert.ok(ctx.llm.listProviders().some((p) => p.id === 'chatgpt-subscription'));
-  assert.ok((await ctx.agentPresets.list()).every((p) => !p.broken));
   const expected = new URL('../src/compaction.js', import.meta.url).href;
+  // The optional session capability settles independently of account startup.
+  // Wait for this fixture's four real retained revisions, not a version label.
+  for (let i = 0; i < 150; i++) {
+    const ready = ctx.agentPresets
+      .inspectCompositions()
+      .filter((c) => c.modules.some((m) => m.moduleName === expected));
+    if (ready.length === 4) break;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  assert.ok((await ctx.agentPresets.list()).every((p) => !p.broken));
   const compositions = ctx.agentPresets.inspectCompositions();
   assert.equal(compositions.length, 4);
   for (const c of compositions) {
@@ -261,6 +285,9 @@ try {
   console.log(
     JSON.stringify({
       nativeProductionBootstrap: 'passed',
+      ...(versionLabel === undefined
+        ? {}
+        : { syntheticVersionLabel: versionLabel, versionMetadataOnly: true }),
       realMainEntry: true,
       singleProviderBundle: true,
       allFourPresetsAdapted: true,
@@ -273,7 +300,7 @@ try {
       mainEntryPreparedNegativeCapability: true,
       mainEntryUnknownSessionAdmission: true,
       existingSourcesPreserved: true,
-      nativeProfileCompatibilityPreflight: true,
+      nativeProfileCompositionFixture: true,
       ownerSettingsCoverageDiagnostics: true,
     }),
   );

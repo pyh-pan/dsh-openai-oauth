@@ -11,21 +11,34 @@ import { classifyDshVersion } from '../src/compatibility.js';
 export async function verifyProfileCompatibility(asar) {
   const bootDir = join(asar, 'dsh/node_modules/@deepseek-ai/dsh-app-boot');
   const version = JSON.parse(await readFile(join(bootDir, 'package.json'), 'utf8')).version;
-  // Historical validated releases may predate the boot-policy contract.
-  // Every future candidate must exercise it, rather than silently skipping.
-  if (['0.2.0-rc.2', '0.2.1-rc.1'].includes(version))
-    return { profileCompatibilityPolicyTested: false };
   const boot = await import(pathToFileURL(join(bootDir, 'lib/index.js')).href);
+  if (
+    ['evaluatePluginCompatibility', 'loadProfileDirectory', 'composeEntries'].some(
+      (name) => typeof boot[name] !== 'function',
+    )
+  )
+    return { profileCompatibilityPolicyTested: false, reason: 'boot-policy-contract-absent' };
   const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
   const patch = await readFile(new URL('../cordis.patch.yml', import.meta.url), 'utf8');
   assert.equal(manifest.engines.dsh, undefined, 'use real peer requirements, not an override');
   for (const runtime of SUPPORTED_DSH_VERSIONS)
     assert.equal(boot.evaluatePluginCompatibility(manifest, {}, runtime), undefined);
-  for (const runtime of ['0.2.1-rc.3', '0.2.1', '0.2.2-alpha.1', '0.2.9', '0.2.99-rc.1'])
+  for (const runtime of [
+    '0.2.1-rc.3',
+    '0.2.1',
+    '0.2.2-alpha.1',
+    '0.2.9',
+    '0.2.99-rc.1',
+    '0.3.0-rc.1',
+    '0.3.0',
+    '1.0.0',
+  ])
     assert.equal(boot.evaluatePluginCompatibility(manifest, {}, runtime), undefined);
   // Cross-check the shared classifier against the actual installed SemVer policy.
   for (const runtime of [
     ...SUPPORTED_DSH_VERSIONS,
+    '0.1.9',
+    '0.2.0-rc.1',
     '0.2.0-rc.2+build',
     '0.2.0',
     '0.2.0-rc.3',
@@ -49,7 +62,7 @@ export async function verifyProfileCompatibility(asar) {
       classifyDshVersion(runtime) !== 'unsupported',
       `manifest/helper drift for ${runtime}`,
     );
-  for (const runtime of ['0.3.0-0', '0.3.0-rc.1', '0.3.0', '9.0.0']) {
+  for (const runtime of ['0.1.9', '0.2.0-alpha.1', '0.2.0-rc.1']) {
     const denied = boot.evaluatePluginCompatibility(manifest, {}, runtime);
     assert.ok(denied, `unexpected support for ${runtime}`);
     assert.equal(denied.exempted, false);
@@ -124,8 +137,8 @@ export async function verifyProfileCompatibility(asar) {
       legacyBundleDenied: legacyDenied,
       currentBundleLoadedWithoutExemption: true,
       existingProfileLayerPreserved: true,
-      outsideFamilyDenied: true,
-      candidateRangeMatchesInstalledPolicy: true,
+      belowMinimumDenied: true,
+      minimumRangeMatchesInstalledPolicy: true,
     };
   } finally {
     await rm(dir, { recursive: true, force: true });

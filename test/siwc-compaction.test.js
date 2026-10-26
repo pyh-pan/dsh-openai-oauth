@@ -334,6 +334,47 @@ test('manual recovery needs a committed useful result, not null or an invalid re
   assert.doesNotThrow(() => f.engine.assertConversationReady(f.agent.session));
 });
 
+test('missing native hooks fail by contract instead of a release label or an incidental TypeError', () => {
+  for (const method of ['summarize', 'compactIfNeeded', 'compactNow']) {
+    class Broken extends Basic {}
+    Broken.prototype[method] = undefined;
+    assert.throws(
+      () =>
+        createCompactionClass({
+          BasicCompactionEngine: Broken,
+          BlockAssembler: Assembler,
+          LlmError: ErrorFixture,
+        }),
+      { code: 'DSH_SIWC_COMPACTION_CONTRACT_MISSING' },
+    );
+  }
+  class BrokenInject extends Basic {
+    static inject = undefined;
+  }
+  assert.throws(
+    () =>
+      createCompactionClass({
+        BasicCompactionEngine: BrokenInject,
+        BlockAssembler: Assembler,
+        LlmError: ErrorFixture,
+      }),
+    { code: 'DSH_SIWC_COMPACTION_CONTRACT_MISSING' },
+  );
+  for (const method of ['push', 'blocks']) {
+    class BrokenAssembler extends Assembler {}
+    BrokenAssembler.prototype[method] = undefined;
+    assert.throws(
+      () =>
+        createCompactionClass({
+          BasicCompactionEngine: Basic,
+          BlockAssembler: BrokenAssembler,
+          LlmError: ErrorFixture,
+        }),
+      { code: 'DSH_SIWC_COMPACTION_CONTRACT_MISSING' },
+    );
+  }
+});
+
 test('local limits reject typos, zero and timer overflow', () => {
   assert.deepEqual(resolveSummaryLimits(), { summaryTimeoutMs: 300000, maxSummaryBytes: 262144 });
   for (const config of [

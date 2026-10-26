@@ -20,12 +20,13 @@
 
 ## 支持范围
 
-已验证 Desktop 版本：**0.2.1-rc.2、0.2.1-rc.1 和 0.2.0-rc.2**；开发/安装脚本要求 **Node.js 24+**。
+Desktop 最低要求：`>=0.2.0-rc.2`；开发/安装脚本要求 **Node.js 24+**。历史原生基线为 **0.2.1-rc.2、0.2.1-rc.1 和 0.2.0-rc.2**，各平台的实际证据单独记录。
 
-前向候选范围：`0.2.0-rc.2 || >=0.2.1-rc.1 <0.3.0-0`。后续 0.2.x 不再仅因精确版本号不同被拒绝，但属于**兼容候选，不冒充已验证版本**：安装或桌面直接升级后的首次加载，必须先通过隔离原生检查，再启用真实账号运行时。跨到 0.3（包括预发布）、组件混版、关键契约缺失/检查失败仍拒绝。详见[前向兼容策略](docs/forward-compatibility.md)。
+新版本不需要添加白名单，也不在生产启动时运行整套测试。加载只设置最低门槛，实际 Interface、owner 鉴权与会话保护决定可用能力；版本探测失败或组件版本字符串不同，本身不构成停用理由。宽加载范围不等于已验证所有未来发行版。详见[前向兼容策略](docs/forward-compatibility.md)。
 
 - Windows：0.2.1-rc.2 原生回归通过，用户已确认初步修复后桌面入口恢复；后续启动防护加固的最终桌面复核待完成。保留 0.2.1-rc.1 / 0.2.0-rc.2 支持与此前验收记录。
 - macOS：0.2.0-rc.2 工程/原生合成测试此前通过；0.2.1-rc.1 / 0.2.1-rc.2 的新版原生回归及桌面实网验收待完成，不以 Windows 或 Node 测试替代。
+- macOS 0.2.1-rc.3：四项隔离原生检查通过；桌面验收待完成。
 - Windows/macOS/Linux CI 只证明 Node 协议/工程测试，不等于桌面授权、推理实测。
 - 暂不承诺旧 DSH、远程/headless Host 或 Linux Desktop。
 
@@ -54,7 +55,7 @@ npm run dsh -- plugin --profile desktop add -w .
 
 ```sh
 npm run pack
-npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.6.tgz
+npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.7.tgz
 ```
 
 不要同时启用原私有 bundle 和本项目：为保留既有授权，二者刻意使用同一 provider/凭据身份。切换步骤见 [迁移](docs/migration.md)。
@@ -75,7 +76,7 @@ npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth
 - 模型/推理档位/额度取决于账号与服务端，不保证无限额度或任意模型。
 - 支持所选模型可接受的文本、规范化图片与常见文档，通过 Responses 内联传入；不只是打开上传按钮。单次完整请求最多 20 张图片、10 个文件，每文件 20 MiB、文件合计 40 MiB。详见[附件类型、原生契约与验证边界](docs/attachments.md)。
 - 不支持音视频、Files 上传 API 或托管 MCP/tool-search。未知二进制格式、超限附件历史会明确报错，不静默丢弃。
-- 本适配器保留 SIWC 预览的保守参数契约：普通调用显式 `maxTokens`/`temperature` 仍明确报错，不假装生效。在 Desktop 0.2.1-rc.2 上，0.3.6 已将 [摘要兼容与逐会话覆盖保护](docs/compaction.md)统一集成到原插件，对 standard/cordis/ptc/minimal 在内存中适配，不写用户 preset，也不需要额外安装本地压缩 bundle。其他版本或自定义组合不会自动获得这项验证。
+- 本适配器保留 SIWC 预览的保守参数契约：普通调用显式 `maxTokens`/`temperature` 仍明确报错，不假装生效。原插件统一集成[摘要兼容与逐会话覆盖保护](docs/compaction.md)，对形状兼容的 standard/cordis/ptc/minimal 在内存中适配，不写用户 preset，也不需要额外安装本地压缩 bundle。0.3.7 起按实际宿主能力启用，不再精确限定发行版本；保护缺失或尚未就绪时，阻止相关会话请求而保留账号设置。自定义或未覆盖组合不会被静默批准。
 - 失败不会回退到 API Key 或其他余额源。
 - Token 仅保存在宿主原生 credentials 服务，不进入浏览器存储或普通配置；不宣称本地文件等同系统钥匙串加密。
 - 退出先尝试远端撤销，再清本账号本地 Token、保留注册；远端未确认会明确报告，应在 ChatGPT 设置检查访问。
@@ -91,11 +92,11 @@ npm run check
 npm run test:package
 npm run test:native
 npm run test:race
-npm run test:compaction # 摘要 hook 固定于 Desktop 0.2.1-rc.2
+npm run test:compaction # 已安装宿主的原生压缩契约
 npm run test:presets    # 真实主入口与全部受支持 preset 隔离组
 ```
 
-协议测试使用合成数据/受控上游；原生测试使用临时凭据文件，不访问真实授权或消耗推理额度。真实账号验收与之分开记录。
+这些检查在开发/发布时显式执行，不因宿主版本变化而由生产启动或安装器自动运行。协议测试使用合成数据/受控上游；原生测试使用临时凭据文件，不访问真实授权或消耗推理额度。真实账号验收与之分开记录。
 
 项目直接发布 ESM 源码，不需要提交构建目录、提取的 ASAR 或 vendor 快照。贡献说明见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 

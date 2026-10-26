@@ -1,4 +1,4 @@
-// Reused by candidate native preflight and the optional compaction suite.
+// Reused by explicit native development/release checks.
 // Only public Schema validation, native registry metadata and synthetic input.
 import assert from 'node:assert/strict';
 import { createPluginConfig, normalizePluginConfig } from '../src/siwc/request-policy.js';

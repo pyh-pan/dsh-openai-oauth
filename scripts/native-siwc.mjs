@@ -122,9 +122,7 @@ try {
       };
     },
     {
-      // This IS the isolated native check. It uses only the temporary store and
-      // controlled fetch above; do not recursively spawn another copy of itself.
-      verifyCandidate: async () => {},
+      connectionNative: connection,
       Schema,
     },
   );

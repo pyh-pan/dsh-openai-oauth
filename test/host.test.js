@@ -98,17 +98,20 @@ test('unsupported systems, unsafe bundle names and relative overrides fail close
     /DESKTOP_NOT_FOUND/,
   );
 });
-test('incompatible Host metadata is rejected before any installation command', () => {
+test('a missing necessary Host contract is rejected before any installation command', () => {
   let calls = 0;
   assert.throws(
     () =>
       invokeCli(host, ['plugin', 'add', 'example'], {
         spawn: () => {
           calls++;
-          return { status: 0, stdout: JSON.stringify({ ...info, llmVersion: '0.1.0' }) };
+          return {
+            status: 0,
+            stdout: JSON.stringify({ ...info, contractIssues: ['llm.registerAdapter'] }),
+          };
         },
       }),
-    /DSH_COMPONENT_VERSION_MISMATCH/,
+    /DSH_HOST_CONTRACT_MISSING/,
   );
   assert.equal(calls, 1);
   assert.throws(

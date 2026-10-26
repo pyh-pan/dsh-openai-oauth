@@ -119,6 +119,7 @@ const definition = (id) => ({
             retainTokens: 1000,
           },
         },
+        { name: 'cordis:siwc-observer', config: { futureField: true } },
       ],
     },
   ],
@@ -188,6 +189,7 @@ function fixture(id, preset) {
 try {
   await ctx.plugin(Loader, { baseUrl: pathToFileURL(asar + '/dsh/package.json').href });
   ctx.loader.builtins.group = Group;
+  ctx.loader.builtins['siwc-observer'] = { apply() {} };
   await ctx.plugin(native.default);
   await ctx.plugin(sessions.default);
   await ctx.plugin(projections.default);
@@ -251,6 +253,11 @@ try {
     const f = fixture('unified-' + id, id),
       agent = await bind(id, f.s);
     integration.assertCoverage(agent.id);
+    assert.ok(
+      ctx.agentPresets
+        .inspectCompositions(agent.ctx)[0]
+        .modules.some((m) => m.moduleName === 'cordis:siwc-observer'),
+    );
     const engine = ctx.agentPresets.serviceFor(agent, 'compaction');
     assert.equal(engine[COVERAGE], COVERAGE_TOKEN);
     const sizeBefore = ctx.tokenMeter.measure(f.s).totalTokens;
@@ -411,6 +418,7 @@ try {
   console.log(
     JSON.stringify({
       nativeUnifiedPresetIntegration: 'passed',
+      additivePresetPluginPreserved: true,
       presets: SUPPORTED_PRESETS,
       checkpointAndShrinkCount: reduced,
       explicitCompactNowAllPresets: true,
