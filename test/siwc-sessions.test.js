@@ -94,6 +94,61 @@ test('near-expiry refresh uses issued client/resource, rotates atomically and se
   assert.equal(requests.length, 1); // No fresh ID token: no needless JWKS fetch.
 });
 
+test('read-only catalog access does not preemptively rotate a still-valid token', async (t) => {
+  let refreshes = 0;
+  const { sessions, key, accounts } = await setup({
+    expiresAt: NOW + 30000,
+    protocol: {
+      refresh: async (previous) => {
+        refreshes++;
+        return {
+          ...previous,
+          accessToken: 'rotated-access',
+          refreshToken: 'rotated-refresh',
+          expiresAt: NOW + 3600000,
+        };
+      },
+    },
+  });
+  t.after(() => sessions.dispose());
+  assert.equal((await sessions.access(key, { allowNearExpiry: true })).accessToken, 'old-access');
+  assert.equal(refreshes, 0);
+  assert.equal((await accounts.registration(key)).refreshToken, 'old-refresh');
+  // The metadata exception must not alter the next actual request's policy.
+  assert.equal((await sessions.access(key)).accessToken, 'rotated-access');
+  assert.equal(refreshes, 1);
+});
+
+for (const { expiresAt, forceRefresh } of [
+  { expiresAt: NOW - 1 },
+  { expiresAt: NOW },
+  { expiresAt: NOW + 30000, forceRefresh: true },
+])
+  test(`catalog access still refreshes when expired or explicitly forced: ${expiresAt} / ${!!forceRefresh}`, async (t) => {
+    let refreshes = 0;
+    const { sessions, key, accounts } = await setup({
+      expiresAt,
+      protocol: {
+        refresh: async (previous) => {
+          refreshes++;
+          return {
+            ...previous,
+            accessToken: 'refreshed-access',
+            refreshToken: 'refreshed-refresh',
+            expiresAt: NOW + 3600000,
+          };
+        },
+      },
+    });
+    t.after(() => sessions.dispose());
+    assert.equal(
+      (await sessions.access(key, { allowNearExpiry: true, forceRefresh })).accessToken,
+      'refreshed-access',
+    );
+    assert.equal(refreshes, 1);
+    assert.equal((await accounts.registration(key)).refreshToken, 'refreshed-refresh');
+  });
+
 test('unexpired token resumes without network after manager recreation', async (t) => {
   let calls = 0;
   const protocol = {

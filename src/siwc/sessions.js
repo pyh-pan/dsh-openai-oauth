@@ -92,7 +92,7 @@ export class SessionManager {
   access(key, options = {}) {
     return this.#track(this.#access(key, options));
   }
-  async #access(key, { signal, selection, forceRefresh = false } = {}) {
+  async #access(key, { signal, selection, forceRefresh = false, allowNearExpiry = false } = {}) {
     this.#open(key);
     ensureNotAborted(signal);
     // This also validates the namespace/key, without reading any other provider.
@@ -111,7 +111,11 @@ export class SessionManager {
           401,
         );
       if (!account.scopes?.includes(DIRECT_SCOPE)) reject('DIRECT_PERMISSION_MISSING', 403);
-      if (!forceRefresh && account.expiresAt > this.now() + this.refreshMarginMs) return undefined;
+      // Read-only model discovery can use a token that is still valid now.
+      // It must not rotate credentials merely to edit local model controls.
+      // Actual Responses calls retain the conservative proactive margin.
+      const margin = allowNearExpiry === true ? 0 : this.refreshMarginMs;
+      if (!forceRefresh && account.expiresAt > this.now() + margin) return undefined;
       if (!account.refreshToken) {
         terminalError = new SiwcError('ACCOUNT_REAUTH_REQUIRED', 401);
         return record(cleared(account, 'reauth-required', this.now()));

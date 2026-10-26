@@ -33,6 +33,14 @@ Verification reads the actual installed runtime. `test:presets` boots the real m
 
 Reference: [dsh-context 0.74.0 compatibility rules](https://github.com/bowenliang123/dsh-context/blob/v0.74.0/docs/compatibility.md), confirmed against the installed published artifact. Its minimum/shape-driven design is adopted, not its display-data fail-open policy for credentials or inference.
 
+## Reasoning selection and authorization (0.3.8)
+
+The native `SessionController.selectModel` first checks model availability. After the adapter's 60-second catalog cache expires, that read previously used the same proactive OAuth refresh margin as inference. A still-valid token could therefore trigger rotating refresh merely while editing reasoning effort; an interrupted refresh surfaced as `session/model-unavailable` with `AUTH_REQUEST_UNCONFIRMED`.
+
+Version 0.3.8 permits only read-only model discovery to use a still-unexpired Access Token without proactive rotation. Catalog expiry, supported-effort validation, account/selection checks and atomic refresh remain intact. Actual Responses calls retain the conservative refresh margin; an expired token still requires normal refresh. This does not hide a broken authorization connection or prove an existing real grant has recovered.
+
+The isolated native regression invokes the actual installed public `SessionController.selectModel`: warm the catalog, advance 61 seconds, change high to low with a token still valid for 59 seconds, and verify zero refresh calls. Negative checks retain unsupported-effort denial, inference's proactive refresh, expiry enforcement, a single attempt on an ambiguous refresh and preservation of its synthetic grant. User credentials and real inference are not used. Real-account reasoning-switch acceptance is separate and pending.
+
 ## Historical repair — Desktop 0.2.1-rc.2: both entries disappear
 
 Observed cause: the profile still names the public bundle, but plugin 0.3.1 declares the DSH peer range `0.2.0-rc.2 || 0.2.1-rc.1`. The installed rc.2 `dsh-app-boot` evaluates DSH peer requirements (even optional peers) and skips an incompatible bundle before composing its patch layer. Thus neither Host provider registration nor client settings activation is contributed. The install helper independently rejects the same unvalidated tuple. This is a package activation failure, not evidence of a failed OAuth exchange or erased credentials.

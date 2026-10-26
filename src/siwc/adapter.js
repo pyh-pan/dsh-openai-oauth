@@ -247,7 +247,12 @@ export function createAdapterClass({
       const lifetime = this.#signal(signal);
       await this.#selected(selection, lifetime);
       const access = await withSignal(
-        () => this.#sessions.access(selection.key, { signal: lifetime, selection }),
+        () =>
+          this.#sessions.access(selection.key, {
+            signal: lifetime,
+            selection,
+            allowNearExpiry: path === 'models',
+          }),
         lifetime,
       );
       await this.#selected(selection, lifetime);

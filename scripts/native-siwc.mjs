@@ -15,11 +15,13 @@ import { sessionAffinity } from '../src/siwc/wire.js';
 import { verifyProfileCompatibility } from './native-profile-compatibility.mjs';
 import { verifyNativeRequestPolicy } from './native-request-policy.mjs';
 import { verifyNativeAttachments } from './native-attachments.mjs';
+import { verifyNativeModelSelection } from './native-model-selection.mjs';
 
 const asar = process.env.DSH_ASAR;
 if (!asar) throw new Error('Set DSH_ASAR');
 const profileCompatibility = await verifyProfileCompatibility(asar);
 const attachmentChecks = await verifyNativeAttachments(asar);
+const modelSelectionChecks = await verifyNativeModelSelection(asar);
 const req = createRequire(pathToFileURL(join(asar, 'package.json')));
 const { Context } = req('@deepseek-ai/cordis');
 const schemaModule = req('@deepseek-ai/schemastery');
@@ -257,6 +259,7 @@ try {
     JSON.stringify({
       ...profileCompatibility,
       ...attachmentChecks,
+      ...modelSelectionChecks,
       nativeServices: true,
       nativeRequestPolicySchema,
       hostOwnedBoundedRetryPolicy: true,
