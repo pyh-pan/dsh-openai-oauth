@@ -1,5 +1,6 @@
 import { RESOURCE, SiwcError, boundedJson, reject } from './protocol.js';
 import { AUTH_NETWORK_MESSAGES } from './auth-network.js';
+import { formatAuthDiagnostic } from './auth-diagnostics.js';
 import {
   ATTACHMENT_MESSAGES,
   attachmentCapabilities,
@@ -227,7 +228,11 @@ export function createAdapterClass({
       const message =
         TIMEOUT_MESSAGES[rawCode] ?? AUTH_NETWORK_MESSAGES[rawCode] ?? ATTACHMENT_MESSAGES[rawCode];
       const code = TIMEOUT_MESSAGES[rawCode] ? 'TIMEOUT' : rawCode;
-      return new LlmError(message ?? code, code);
+      const diagnostic =
+        AUTH_NETWORK_MESSAGES[rawCode] && reason instanceof SiwcError
+          ? formatAuthDiagnostic(reason.authDiagnostic)
+          : '';
+      return new LlmError(diagnostic ? `${diagnostic}\n${message}` : (message ?? code), code);
     }
     #signal(signal) {
       return AbortSignal.any([this.#closed.signal, ...(signal ? [signal] : [])]);

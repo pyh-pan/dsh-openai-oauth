@@ -14,7 +14,8 @@ const plugin = createHostPlugin(
   native,
   (ctx) => {
     const accounts = new AccountStore(ctx.credentials);
-    const protocol = new OpenAIProtocol();
+    // Temporary diagnostic build: capture one sanitized token-request failure.
+    const protocol = new OpenAIProtocol({ diagnostics: true });
     const bridge = createAttachmentBridge(ctx, native);
     return {
       accounts,

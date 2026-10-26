@@ -10,6 +10,26 @@ import { OpenAIProtocol, DIRECT_SCOPE, ISSUER } from '../src/siwc/protocol.js';
 import { createAdapterClass } from '../src/siwc/adapter.js';
 import { PROVIDER } from '../src/siwc/controller.js';
 import { MemoryCredentials, CLIENT, NOW } from '../test/siwc-fixtures.js';
+function assertSafeDiagnostic(message, tokenState) {
+  const match = message.match(/\[SIWC-AUTH-DIAG first-failure\] (\{.*\}) \[\/SIWC-AUTH-DIAG\]/);
+  assert.ok(match, 'native public error must retain the safe diagnostic');
+  let value;
+  try {
+    value = JSON.parse(match[1]);
+  } catch {
+    assert.fail('native diagnostic must be valid JSON');
+  }
+  assert.equal(value.phase, 'refresh');
+  assert.equal(value.tokenState, tokenState);
+  assert.equal(value.stage, 'fetch_started');
+  assert.equal(value.attempts, 1);
+  assert.equal(value.timeout, false);
+  assert.deepEqual(value.transportCodes, ['ECONNRESET']);
+  assert.doesNotMatch(
+    match[1],
+    /synthetic-selection|fixture-reasoning|https?:|refresh_token|client_id/,
+  );
+}
 
 export async function verifyNativeModelSelection(asar) {
   const req = createRequire(pathToFileURL(join(asar, 'dsh/package.json')));
@@ -45,6 +65,7 @@ export async function verifyNativeModelSelection(asar) {
     const before = await accounts.registration(key);
     const protocol = new OpenAIProtocol({
       now: () => now,
+      diagnostics: true,
       fetchImpl: async () => {
         authCalls++;
         throw new TypeError('synthetic socket closure', {
@@ -113,6 +134,7 @@ export async function verifyNativeModelSelection(asar) {
         await assert.rejects(select('low'), (error) => {
           assert.equal(error.code, 'session/model-unavailable');
           assert.match(error.message, /not automatically replayed/);
+          assertSafeDiagnostic(error.message, 'expired');
           return true;
         });
         assert.equal(selected.reasoningEffort, 'high');
@@ -144,6 +166,7 @@ export async function verifyNativeModelSelection(asar) {
         }))
           output.push(chunk);
         assert.equal(output.at(-1).reason.failure.code, 'AUTH_REQUEST_UNCONFIRMED');
+        assertSafeDiagnostic(output.at(-1).reason.failure.message, 'unexpired');
         assert.equal(authCalls, 1, 'actual Responses readiness retains proactive refresh');
       }
       assert.equal(responseCalls, 0);
@@ -160,6 +183,7 @@ export async function verifyNativeModelSelection(asar) {
   }
   return {
     nativeReasoningSelection: true,
+    nativeAuthDiagnosticPreserved: true,
     unexpiredCatalogDoesNotRotate: true,
     reasoningChangeAfterCatalogExpiry: true,
     unsupportedEffortStillDenied: true,

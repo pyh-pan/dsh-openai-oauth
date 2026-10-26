@@ -1,5 +1,6 @@
 import { createHash, createPublicKey, timingSafeEqual, verify } from 'node:crypto';
-import { AuthNetworkError, requestAuth } from './auth-network.js';
+import { AuthNetworkError, AUTH_NETWORK_MESSAGES, requestAuth } from './auth-network.js';
+import { observeAuthRequest } from './auth-diagnostics.js';
 
 export const ISSUER = 'https://auth.openai.com';
 export const RESOURCE = 'https://api.openai.com/v1';
@@ -137,16 +138,52 @@ export class OpenAIProtocol {
   #now;
   #metadata;
   #keys;
-  constructor({ fetchImpl = globalThis.fetch, now = Date.now, timeoutMs = 12000 } = {}) {
+  #diagnostics;
+  #firstDiagnostic;
+  constructor({
+    fetchImpl = globalThis.fetch,
+    now = Date.now,
+    timeoutMs = 12000,
+    diagnostics = false,
+  } = {}) {
     this.#fetch = fetchImpl;
     this.#now = now;
     this.timeoutMs = timeoutMs;
+    this.#diagnostics = diagnostics === true;
   }
-  async request(url, options = {}) {
+  async request(url, options = {}, diagnosticContext) {
+    let observation;
+    if (this.#diagnostics && !this.#firstDiagnostic && url === TOKEN_ENDPOINT) {
+      try {
+        observation = observeAuthRequest(this.#fetch, url, diagnosticContext);
+      } catch {
+        /* Observation must not block authorization. */
+      }
+    }
     try {
-      return await requestAuth(this.#fetch, url, options, this.timeoutMs);
+      return await requestAuth(observation?.fetch ?? this.#fetch, url, options, this.timeoutMs);
     } catch (error) {
-      reject(error instanceof AuthNetworkError ? error.code : 'AUTH_NETWORK_FAILED', 502);
+      const code = error instanceof AuthNetworkError ? error.code : 'AUTH_NETWORK_FAILED';
+      const failure = new SiwcError(code, 502);
+      if (
+        this.#diagnostics &&
+        url === TOKEN_ENDPOINT &&
+        Object.hasOwn(AUTH_NETWORK_MESSAGES, code)
+      ) {
+        try {
+          this.#firstDiagnostic ??= observation?.snapshot(code, this.timeoutMs);
+          if (this.#firstDiagnostic) failure.authDiagnostic = this.#firstDiagnostic;
+        } catch {
+          /* Never replace the actual failure with a diagnostic error. */
+        }
+      }
+      throw failure;
+    } finally {
+      try {
+        observation?.dispose();
+      } catch {
+        /* Cleanup must not replace the request outcome. */
+      }
     }
   }
   async metadata(signal) {
@@ -277,19 +314,26 @@ export class OpenAIProtocol {
         : {}),
     };
   }
-  async exchange(form, signal) {
+  async exchange(form, signal, diagnosticContext) {
     if (
       !validClientId(form.client_id) ||
       form.resource !== RESOURCE ||
       !['authorization_code', 'refresh_token'].includes(form.grant_type)
     )
       reject('INVALID_TOKEN_REQUEST');
-    const response = await this.request(TOKEN_ENDPOINT, {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
-      body: new URLSearchParams(form).toString(),
-      signal,
-    });
+    const response = await this.request(
+      TOKEN_ENDPOINT,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          accept: 'application/json',
+        },
+        body: new URLSearchParams(form).toString(),
+        signal,
+      },
+      diagnosticContext,
+    );
     const data = await boundedJson(response);
     if (!response.ok) {
       const codes = {
@@ -321,6 +365,7 @@ export class OpenAIProtocol {
         resource: RESOURCE,
       },
       signal,
+      { phase: 'code_exchange', tokenState: 'unknown' },
     );
     const tokens = tokenSet(data, { now: this.#now() });
     const identity = await this.verifyIdToken(tokens.idToken, { clientId, nonce, subject, signal });
@@ -332,6 +377,9 @@ export class OpenAIProtocol {
     };
   }
   async refresh(previous, signal) {
+    let tokenState = 'unknown';
+    if (Number.isFinite(previous.expiresAt))
+      tokenState = previous.expiresAt <= this.#now() ? 'expired' : 'unexpired';
     const data = await this.exchange(
       {
         grant_type: 'refresh_token',
@@ -340,6 +388,10 @@ export class OpenAIProtocol {
         resource: RESOURCE,
       },
       signal,
+      {
+        phase: 'refresh',
+        tokenState,
+      },
     );
     const next = tokenSet(data, { now: this.#now(), previous, requireId: false });
     // A fresh ID token has a fresh lifetime, but a refresh has no new OAuth nonce.

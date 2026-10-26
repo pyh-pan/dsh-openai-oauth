@@ -41,6 +41,12 @@ Version 0.3.8 permits only read-only model discovery to use a still-unexpired Ac
 
 The isolated native regression invokes the actual installed public `SessionController.selectModel`: warm the catalog, advance 61 seconds, change high to low with a token still valid for 59 seconds, and verify zero refresh calls. Negative checks retain unsupported-effort denial, inference's proactive refresh, expiry enforcement, a single attempt on an ambiguous refresh and preservation of its synthetic grant. User credentials and real inference are not used. Real-account reasoning-switch acceptance is separate and pending.
 
+### Temporary authorization diagnostic build
+
+`0.3.8-diagnostic.1` is an observation build, **not a fix or recovery claim for the real authorization failure**. The real Host retains one immutable, sanitized first token-request transport failure per runtime and adds a `SIWC-AUTH-DIAG first-failure` line to the existing native error. It records only finite phase/expiry-state/stage enums, elapsed time and budget, bounded attempt count, timeout, allowlisted error kinds/codes and proxy-environment presence flags. Flags do not prove the actual proxy route. No token, identity, URL, headers, body or original exception is retained in that record.
+
+The observer does not change request arguments, the 12-second request budget, 20-second maintenance budget, TLS, proxy policy or retry rules. Undici stages are correlated with this request's async context and request identity; observers unsubscribe when that request ends. Unsupported/missing stage events leave the stage less specific, not a failed authorization dependency. No diagnostic file is written by this module. The stored first record is reused rather than collecting later failures, and a runtime restart clears it. Protocol diagnostics default to off; only this temporary build's main entry opts in. Real-account operation remains user-controlled.
+
 ## Historical repair — Desktop 0.2.1-rc.2: both entries disappear
 
 Observed cause: the profile still names the public bundle, but plugin 0.3.1 declares the DSH peer range `0.2.0-rc.2 || 0.2.1-rc.1`. The installed rc.2 `dsh-app-boot` evaluates DSH peer requirements (even optional peers) and skips an incompatible bundle before composing its patch layer. Thus neither Host provider registration nor client settings activation is contributed. The install helper independently rejects the same unvalidated tuple. This is a package activation failure, not evidence of a failed OAuth exchange or erased credentials.
