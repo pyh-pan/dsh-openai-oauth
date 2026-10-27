@@ -1,5 +1,11 @@
 import { createHash, createPublicKey, timingSafeEqual, verify } from 'node:crypto';
-import { AuthNetworkError, AUTH_NETWORK_MESSAGES, requestAuth } from './auth-network.js';
+import {
+  AuthNetworkError,
+  AUTH_NETWORK_MESSAGES,
+  requestAuth,
+  authResponseSignal,
+} from './auth-network.js';
+import { withSignal, cancelBody } from './abortable.js';
 import { observeAuthRequest } from './auth-diagnostics.js';
 
 export const ISSUER = 'https://auth.openai.com';
@@ -43,10 +49,10 @@ export const validHostId = (id) =>
   typeof id === 'string' &&
   /^urn:uuid:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
 
-export async function boundedJson(response, maxBytes = MAX_JSON) {
+export async function boundedJson(response, maxBytes = MAX_JSON, signal) {
   const declared = Number(response.headers.get('content-length'));
   if (Number.isFinite(declared) && declared > maxBytes) {
-    await response.body?.cancel();
+    cancelBody(response);
     reject('RESPONSE_TOO_LARGE', 502);
   }
   if (!response.body) reject('INVALID_RESPONSE', 502);
@@ -55,11 +61,11 @@ export async function boundedJson(response, maxBytes = MAX_JSON) {
   let size = 0;
   try {
     while (true) {
-      const { done, value } = await reader.read();
+      const { done, value } = await withSignal(() => reader.read(), signal);
       if (done) break;
       size += value.byteLength;
       if (size > maxBytes) {
-        await reader.cancel();
+        Promise.resolve(reader.cancel()).catch(() => {});
         reject('RESPONSE_TOO_LARGE', 502);
       }
       chunks.push(Buffer.from(value));
@@ -68,9 +74,17 @@ export async function boundedJson(response, maxBytes = MAX_JSON) {
     if (!data || typeof data !== 'object' || Array.isArray(data)) reject('INVALID_RESPONSE', 502);
     return data;
   } catch (error) {
+    if (signal?.aborted) throw signal.reason;
     if (error instanceof SiwcError) throw error;
     reject('INVALID_RESPONSE', 502);
   } finally {
+    if (signal?.aborted) {
+      try {
+        Promise.resolve(reader.cancel()).catch(() => {});
+      } catch {
+        /* Best effort. */
+      }
+    }
     reader.releaseLock();
   }
 }
@@ -140,16 +154,19 @@ export class OpenAIProtocol {
   #keys;
   #diagnostics;
   #firstDiagnostic;
+  #stateFor;
   constructor({
     fetchImpl = globalThis.fetch,
     now = Date.now,
     timeoutMs = 12000,
     diagnostics = false,
+    stateFor,
   } = {}) {
     this.#fetch = fetchImpl;
     this.#now = now;
     this.timeoutMs = timeoutMs;
     this.#diagnostics = diagnostics === true;
+    this.#stateFor = stateFor;
   }
   async request(url, options = {}, diagnosticContext) {
     let observation;
@@ -161,10 +178,20 @@ export class OpenAIProtocol {
       }
     }
     try {
-      return await requestAuth(observation?.fetch ?? this.#fetch, url, options, this.timeoutMs);
+      return await requestAuth(
+        observation?.fetch ?? this.#fetch,
+        url,
+        options,
+        this.timeoutMs,
+        this.#stateFor,
+      );
     } catch (error) {
       const code = error instanceof AuthNetworkError ? error.code : 'AUTH_NETWORK_FAILED';
       const failure = new SiwcError(code, 502);
+      failure.renewalOutcome =
+        error instanceof AuthNetworkError && error.writeOutcome === 'not_sent'
+          ? 'not_sent'
+          : 'unknown';
       if (
         this.#diagnostics &&
         url === TOKEN_ENDPOINT &&
@@ -186,14 +213,33 @@ export class OpenAIProtocol {
       }
     }
   }
+  async #json(response, tokenRequest = false) {
+    const signal = authResponseSignal(response);
+    try {
+      return await boundedJson(response, MAX_JSON, signal);
+    } catch (error) {
+      if (signal?.aborted) {
+        const code = tokenRequest
+          ? 'AUTH_REQUEST_UNCONFIRMED'
+          : signal.reason?.name === 'TimeoutError'
+            ? 'AUTH_NETWORK_TIMEOUT'
+            : 'CANCELLED';
+        const failure = new SiwcError(code, 502);
+        if (tokenRequest) failure.renewalOutcome = 'unknown';
+        throw failure;
+      }
+      if (tokenRequest && error instanceof SiwcError) error.renewalOutcome = 'unknown';
+      throw error;
+    }
+  }
   async metadata(signal) {
     if (this.#metadata && this.#metadata.expiresAt > this.#now()) return this.#metadata.value;
     const response = await this.request(DISCOVERY, { signal });
     if (!response.ok) {
-      await response.body?.cancel();
+      cancelBody(response);
       reject('OIDC_DISCOVERY_FAILED', 502);
     }
-    const data = await boundedJson(response);
+    const data = await this.#json(response);
     if (
       data.issuer !== ISSUER ||
       !Array.isArray(data.id_token_signing_alg_values_supported) ||
@@ -213,10 +259,10 @@ export class OpenAIProtocol {
     const metadata = await this.metadata(signal);
     const response = await this.request(metadata.jwksUri, { signal });
     if (!response.ok) {
-      await response.body?.cancel();
+      cancelBody(response);
       reject('JWKS_UNAVAILABLE', 502);
     }
-    const data = await boundedJson(response);
+    const data = await this.#json(response);
     if (!Array.isArray(data.keys) || data.keys.length < 1 || data.keys.length > 128)
       reject('JWKS_INVALID', 502);
     this.#keys = { value: data.keys, loadedAt: this.#now(), expiresAt: this.#now() + 900_000 };
@@ -334,7 +380,7 @@ export class OpenAIProtocol {
       },
       diagnosticContext,
     );
-    const data = await boundedJson(response);
+    const data = await this.#json(response, true);
     if (!response.ok) {
       const codes = {
         invalid_grant: 'INVALID_GRANT',
@@ -347,10 +393,13 @@ export class OpenAIProtocol {
         refresh_token_invalidated: 'REFRESH_TOKEN_INVALID',
         refresh_token_reused: 'REFRESH_TOKEN_INVALID',
       };
-      reject(
+      const failure = new SiwcError(
         codes[data.error] ?? (response.status === 429 ? 'RATE_LIMIT' : 'TOKEN_EXCHANGE_FAILED'),
         response.status >= 500 ? 502 : 400,
       );
+      failure.renewalOutcome =
+        response.status >= 400 && response.status < 500 ? 'rejected' : 'unknown';
+      throw failure;
     }
     return data;
   }
@@ -393,20 +442,31 @@ export class OpenAIProtocol {
         tokenState,
       },
     );
-    const next = tokenSet(data, { now: this.#now(), previous, requireId: false });
-    // A fresh ID token has a fresh lifetime, but a refresh has no new OAuth nonce.
-    // An omitted ID token retains the already-validated login hint, even if expired.
-    const identity =
-      data.id_token === undefined
-        ? {}
-        : await this.verifyIdToken(data.id_token, {
-            clientId: previous.clientId,
-            subject: previous.subject,
-            nonce: previous.oidcNonce,
-            allowMissingNonce: true,
-            signal,
-          });
-    return { ...previous, ...identity, ...next };
+    try {
+      // SIWC returns a replacement on every successful refresh. Never silently
+      // continue an old rotating token when a successful response omitted it.
+      if (typeof data.refresh_token !== 'string' || !data.refresh_token)
+        reject('INVALID_TOKEN_RESPONSE', 502);
+      const next = tokenSet(data, { now: this.#now(), previous, requireId: false });
+      const identity =
+        data.id_token === undefined
+          ? {}
+          : await this.verifyIdToken(data.id_token, {
+              clientId: previous.clientId,
+              subject: previous.subject,
+              nonce: previous.oidcNonce,
+              allowMissingNonce: true,
+              signal,
+            });
+      return { ...previous, ...identity, ...next };
+    } catch (error) {
+      // The token POST already succeeded. A later JWKS/DNS/identity failure
+      // does not prove the old refresh token is still usable.
+      const failure =
+        error instanceof SiwcError ? error : new SiwcError('INVALID_TOKEN_RESPONSE', 502);
+      failure.renewalOutcome = 'unknown';
+      throw failure;
+    }
   }
   async revoke(grant, signal) {
     if (!validClientId(grant.clientId) || !grant.refreshToken) reject('INVALID_REVOCATION');
@@ -421,7 +481,7 @@ export class OpenAIProtocol {
       }).toString(),
       signal,
     });
-    await response.body?.cancel();
+    cancelBody(response);
     if (response.status !== 200)
       reject(response.status >= 500 ? 'REVOCATION_RETRYABLE' : 'REVOCATION_FAILED', 502);
   }

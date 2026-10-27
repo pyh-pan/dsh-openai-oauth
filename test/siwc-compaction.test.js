@@ -82,6 +82,7 @@ function fixture({ config = {}, chunks = [block('smaller'), finish()], stream } 
     logger: { warn() {} },
     sessionProjections: { stateOf: () => ({ failed: false }) },
     llm: {
+      prepareCall: async () => ({}),
       stream: (options) => {
         calls.push(options);
         return stream

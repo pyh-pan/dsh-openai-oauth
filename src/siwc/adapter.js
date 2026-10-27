@@ -1,6 +1,8 @@
 import { RESOURCE, SiwcError, boundedJson, reject } from './protocol.js';
 import { AUTH_NETWORK_MESSAGES } from './auth-network.js';
 import { formatAuthDiagnostic } from './auth-diagnostics.js';
+import { withSignal, guardedBody, cancelBody } from './abortable.js';
+import { ModelCache } from './model-cache.js';
 import {
   ATTACHMENT_MESSAGES,
   attachmentCapabilities,
@@ -27,93 +29,22 @@ const same = (a, b) => a?.key === b?.key && a?.generation === b?.generation;
 const MAX_CATALOG_BYTES = 8 * 1024 * 1024;
 const safeSlug = (id) => typeof id === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/.test(id);
 
+const STATE_MESSAGES = Object.freeze({
+  ACCOUNT_RENEWAL_UNCONFIRMED:
+    'A previous authorization renewal was not confirmed. Automatic reuse of the old refresh token is blocked; authorize this registration again in subscription settings.',
+  ACCOUNT_REFRESH_IN_PROGRESS:
+    'Authorization renewal is in progress; the rotating credential was not resubmitted.',
+  ACCOUNT_REFRESH_REQUIRED:
+    'Authorization must be renewed to obtain a verified catalog. Use the explicit Update model catalog action in subscription settings.',
+  MODEL_CATALOG_UNAVAILABLE:
+    'No verified model catalog is available. Update it in subscription settings.',
+});
 const TIMEOUT_MESSAGES = Object.freeze({
   RESPONSE_HEADERS_TIMEOUT: 'SIWC_RESPONSE_HEADERS_TIMEOUT',
   STREAM_TOTAL_TIMEOUT: 'SIWC_STREAM_TOTAL_TIMEOUT_FROM_HEADERS',
   CATALOG_TIMEOUT: 'SIWC_CATALOG_TIMEOUT',
   ERROR_BODY_TIMEOUT: 'SIWC_ERROR_BODY_TIMEOUT',
 });
-function cancelBody(response) {
-  try {
-    Promise.resolve(response?.body?.cancel()).catch(() => {});
-  } catch {
-    /* Reader already owns/cancelled the body, or transport already failed. */
-  }
-}
-// Race explicitly: an injected/late transport need not reject on abort. Observe
-// both branches and cancel a late Response, so no rejected promise/body escapes.
-function withSignal(start, signal, discard) {
-  return new Promise((resolve, rejectRequest) => {
-    let settled = false;
-    const finish = (callback, value) => {
-      if (settled) return;
-      settled = true;
-      signal.removeEventListener('abort', onAbort);
-      callback(value);
-    };
-    const onAbort = () => finish(rejectRequest, signal.reason ?? new SiwcError('ABORTED'));
-    signal.addEventListener('abort', onAbort, { once: true });
-    if (signal.aborted) return onAbort();
-    let pending;
-    try {
-      pending = start();
-    } catch (error) {
-      finish(rejectRequest, error);
-      return;
-    }
-    Promise.resolve(pending).then(
-      (value) => {
-        if (settled || signal.aborted) {
-          onAbort();
-          try {
-            Promise.resolve(discard?.(value)).catch(() => {});
-          } catch {
-            /* Late-response cleanup is best effort. */
-          }
-        } else finish(resolve, value);
-      },
-      (error) => finish(rejectRequest, error),
-    );
-  });
-}
-// Guard the transport's reader without awaiting an untrusted cancel promise.
-// Cancel closes pending reads synchronously; detach its promise and release the
-// lock even if a custom transport never acknowledges cancellation. Both JSON
-// and SSE parsers keep their existing validation and cancel this wrapper.
-function guardedBody(body, signal) {
-  const reader = body.getReader();
-  let closed = false;
-  const cleanup = () => {
-    if (closed) return;
-    closed = true;
-    try {
-      Promise.resolve(reader.cancel()).catch(() => {});
-    } catch {
-      /* Transport may already have errored. */
-    } finally {
-      reader.releaseLock();
-    }
-  };
-  return {
-    cleanup,
-    body: new ReadableStream({
-      async pull(controller) {
-        try {
-          const part = await withSignal(() => reader.read(), signal);
-          if (closed) return;
-          if (part.done) {
-            controller.close();
-            cleanup();
-          } else controller.enqueue(part.value);
-        } catch (error) {
-          if (!closed) controller.error(error);
-          cleanup();
-        }
-      },
-      cancel: cleanup,
-    }),
-  };
-}
 // boundedJson remains the single JSON size/shape validator, with a reader that
 // also honors deadlines when the fetch implementation ignores AbortSignal.
 async function requestJson(response, signal, maxBytes) {
@@ -140,6 +71,9 @@ export function createAdapterClass({
     #sessions;
     #fetch;
     #cache;
+    #catalogCache;
+    #directory;
+    #epoch = 0;
     #closed = new AbortController();
     #notice = null;
     #policy;
@@ -160,6 +94,7 @@ export function createAdapterClass({
       assertCoverage,
       attachments,
       restoreFiles,
+      catalogCache,
     }) {
       super();
       this.#accounts = accounts;
@@ -168,6 +103,7 @@ export function createAdapterClass({
       this.#attachments = attachments;
       this.#restoreFiles = restoreFiles;
       this.now = now;
+      this.#catalogCache = catalogCache ?? new ModelCache({ now });
       // Retain the original offline fixture's idleTimeoutMs injection. Public
       // configuration has one owner/name: requestPolicy.streamIdleTimeoutMs.
       this.#policy = normalizeRequestPolicy(
@@ -192,7 +128,12 @@ export function createAdapterClass({
       return resolvedRetryPolicy(this.#policy);
     }
     invalidate() {
+      this.#epoch++;
       this.#cache = undefined;
+      this.#directory = undefined;
+    }
+    get directoryStatus() {
+      return this.#directory ? structuredClone(this.#directory) : null;
     }
     get notice() {
       return this.#notice ? structuredClone(this.#notice) : null;
@@ -226,7 +167,10 @@ export function createAdapterClass({
               : 'ABORTED'
             : 'TRANSPORT';
       const message =
-        TIMEOUT_MESSAGES[rawCode] ?? AUTH_NETWORK_MESSAGES[rawCode] ?? ATTACHMENT_MESSAGES[rawCode];
+        TIMEOUT_MESSAGES[rawCode] ??
+        AUTH_NETWORK_MESSAGES[rawCode] ??
+        STATE_MESSAGES[rawCode] ??
+        ATTACHMENT_MESSAGES[rawCode];
       const code = TIMEOUT_MESSAGES[rawCode] ? 'TIMEOUT' : rawCode;
       const diagnostic =
         AUTH_NETWORK_MESSAGES[rawCode] && reason instanceof SiwcError
@@ -245,7 +189,18 @@ export function createAdapterClass({
     }
     async #request(
       path,
-      { selection, signal, body, stream = false, affinity, trace, sessionId, purpose },
+      {
+        selection,
+        signal,
+        body,
+        stream = false,
+        affinity,
+        trace,
+        sessionId,
+        purpose,
+        metadataOnly = false,
+        credentialGeneration,
+      },
     ) {
       // Auth/selection are cancellable, but are not part of the historical
       // headers clock. Do not manufacture a host model-step total deadline.
@@ -256,11 +211,18 @@ export function createAdapterClass({
           this.#sessions.access(selection.key, {
             signal: lifetime,
             selection,
-            allowNearExpiry: path === 'models',
+            allowNearExpiry: path === 'models' && metadataOnly,
+            allowRefresh: !metadataOnly,
           }),
         lifetime,
       );
       await this.#selected(selection, lifetime);
+      if (
+        credentialGeneration !== undefined &&
+        (access.credentialGeneration ?? 0) !== credentialGeneration
+      )
+        reject('MODEL_CATALOG_CHANGED', 409);
+      const catalogEpoch = this.#epoch;
       const timeout = new AbortController();
       const combined = AbortSignal.any([
         lifetime,
@@ -342,7 +304,13 @@ export function createAdapterClass({
           );
           throw new LlmError(failure.message, failure.code, failure);
         }
-        return { response, signal: combined, cleanup };
+        return {
+          response,
+          signal: combined,
+          cleanup,
+          catalogEpoch,
+          credentialGeneration: access.credentialGeneration ?? 0,
+        };
       } catch (error) {
         cleanup();
         cancelBody(response);
@@ -352,16 +320,41 @@ export function createAdapterClass({
         throw failure;
       }
     }
-    async #catalog(selection, signal) {
+    async #catalog(
+      selection,
+      signal,
+      { metadataOnly = false, force = false, capture = false } = {},
+    ) {
       signal = this.#signal(signal);
       signal.throwIfAborted();
+      const scope = await this.#accounts.catalogScope?.(selection);
+      if (scope && !scope.allowed) reject('DIRECT_PERMISSION_MISSING', 403);
       if (
+        !force &&
         this.#cache &&
         same(selection, this.#cache.selection) &&
-        this.#cache.expiresAt > this.now()
+        this.#cache.expiresAt > this.now() &&
+        (scope?.credentialGeneration === undefined ||
+          this.#cache.credentialGeneration === scope.credentialGeneration)
       )
-        return structuredClone(this.#cache.models);
-      const request = await this.#request('models', { selection, signal });
+        return capture
+          ? {
+              models: structuredClone(this.#cache.models),
+              capabilities: this.#cache.capabilities,
+              credentialGeneration: this.#cache.credentialGeneration,
+            }
+          : structuredClone(this.#cache.models);
+      if (metadataOnly && scope) {
+        const retained = await this.#catalogCache.get(scope.scope);
+        await this.#selected(selection, signal);
+        const current = await this.#accounts.catalogScope(selection);
+        if (!current.allowed || current.scope !== scope.scope) reject('ACCOUNT_CHANGED', 409);
+        if (retained) {
+          this.#directory = { cached: true, cachedAt: retained.cachedAt };
+          return retained.models;
+        }
+      }
+      const request = await this.#request('models', { selection, signal, metadataOnly });
       try {
         const data = await requestJson(request.response, request.signal, MAX_CATALOG_BYTES);
         if (!Array.isArray(data.models) || data.models.length > 4096)
@@ -377,6 +370,7 @@ export function createAdapterClass({
           const attachment = attachmentCapabilities(entry, this.#attachmentStore());
           capabilities.set(entry.slug, {
             reasoningSummary: entry.supports_reasoning_summary_parameter === true,
+            reasoningEfforts: reasoning?.efforts.map((level) => level.id),
             ...attachment,
           });
           models.push({
@@ -394,13 +388,27 @@ export function createAdapterClass({
           });
         }
         await this.#selected(selection, request.signal);
+        const currentScope = await this.#accounts.catalogScope?.(selection);
+        if (
+          (!currentScope && this.#epoch !== request.catalogEpoch) ||
+          (currentScope &&
+            (!currentScope.allowed ||
+              currentScope.scope !== scope?.scope ||
+              currentScope.credentialGeneration !== request.credentialGeneration))
+        )
+          reject('MODEL_CATALOG_CHANGED', 409);
         this.#cache = {
           selection,
           models: structuredClone(models),
           capabilities,
+          credentialGeneration: request.credentialGeneration,
           expiresAt: this.now() + 60000,
         };
-        return models;
+        if (currentScope) this.#catalogCache.set(currentScope.scope, models).catch(() => {});
+        this.#directory = { cached: false, cachedAt: this.now() };
+        return capture
+          ? { models, capabilities, credentialGeneration: request.credentialGeneration }
+          : models;
       } catch (error) {
         throw this.#error(error, request.signal);
       } finally {
@@ -413,16 +421,26 @@ export function createAdapterClass({
       try {
         const selection = await withSignal(() => this.#accounts.selection(), this.#closed.signal);
         if (!selection) return [];
-        return await this.#catalog(selection);
+        return await this.#catalog(selection, undefined, { metadataOnly: true });
       } catch (error) {
         const failure = this.#error(error);
         this.#report(failure.failure ?? failure);
         throw failure;
       }
     }
-    async #model(provider, model, selection, signal) {
+    async refreshModels(signal, { renewAuthorization = false } = {}) {
+      const selection = await this.#selected(undefined, signal);
+      if (renewAuthorization)
+        await withSignal(
+          () => this.#sessions.access(selection.key, { signal, selection, forceRefresh: true }),
+          signal,
+        );
+      const models = await this.#catalog(selection, signal, { force: true });
+      return { count: models.length, authorizationRenewed: renewAuthorization };
+    }
+    async #model(provider, model, selection, signal, mode) {
       if (provider !== PROVIDER) reject('NO_ADAPTER');
-      const models = await this.#catalog(selection, signal);
+      const models = await this.#catalog(selection, signal, mode);
       const found = models.find((entry) => entry.id === model);
       if (!found) reject('UNKNOWN_MODEL', 404);
       return found;
@@ -430,7 +448,9 @@ export function createAdapterClass({
     async resolveModel(provider, model, signal) {
       signal = this.#signal(signal);
       try {
-        return await this.#model(provider, model, await this.#selected(undefined, signal), signal);
+        return await this.#model(provider, model, await this.#selected(undefined, signal), signal, {
+          metadataOnly: true,
+        });
       } catch (error) {
         throw this.#error(error, signal);
       }
@@ -438,13 +458,18 @@ export function createAdapterClass({
     async prepareCall(provider, model, signal) {
       signal = this.#signal(signal);
       try {
+        if (provider !== PROVIDER) reject('NO_ADAPTER');
         const selection = await this.#selected(undefined, signal);
-        const info = await this.#model(provider, model, selection, signal);
-        const capability = same(selection, this.#cache?.selection)
-          ? this.#cache.capabilities.get(model)
-          : undefined;
+        // UI resolution never renews; actual preparation does, before capturing
+        // its credential-bound capabilities (including a warm directory).
+        await withSignal(() => this.#sessions.access(selection.key, { signal, selection }), signal);
+        const catalog = await this.#catalog(selection, signal, { capture: true });
+        const info = catalog.models.find((entry) => entry.id === model);
+        if (!info) reject('UNKNOWN_MODEL', 404);
+        const capability = catalog.capabilities.get(model);
         if (!capability) reject('MODEL_CATALOG_CHANGED', 409);
-        return { model: info, stream: (options) => this.#stream(options, selection, capability) };
+        const captured = { ...capability, credentialGeneration: catalog.credentialGeneration };
+        return { model: info, stream: (options) => this.#stream(options, selection, captured) };
       } catch (error) {
         throw this.#error(error, signal);
       }
@@ -478,6 +503,11 @@ export function createAdapterClass({
         // here too, after the selection wait and before any history projection.
         this.#assertCoverage?.(options.sessionId, options.purpose);
         const messages = this.#restoreFiles?.(options, capability) ?? options.messages;
+        if (
+          options.reasoningEffort !== undefined &&
+          !capability.reasoningEfforts?.includes(options.reasoningEffort)
+        )
+          reject('MODEL_CATALOG_CHANGED', 409);
         const attachmentParts = await prepareAttachmentParts(messages, {
           store: this.#attachmentStore(),
           capabilities: capability,
@@ -504,6 +534,7 @@ export function createAdapterClass({
           trace,
           sessionId: options.sessionId,
           purpose: options.purpose,
+          credentialGeneration: capability.credentialGeneration,
         });
         // `stream:true` determines the wire protocol, not a proxy's MIME label.
         // Keep SSE framing/terminal validation; the wrapper only owns transport

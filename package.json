@@ -1,6 +1,6 @@
 {
   "name": "@pyh-pan/dsh-openai-oauth",
-  "version": "0.3.8-diagnostic.1",
+  "version": "0.3.9",
   "private": true,
   "description": "Independent Sign in with ChatGPT subscription provider for DeepSeek Harness Desktop.",
   "type": "module",
@@ -69,7 +69,10 @@
     "@deepseek-ai/dsh-agent-preset-registry": ">=0.2.0-rc.2",
     "@deepseek-ai/dsh-client-connection": ">=0.2.0-rc.2",
     "@deepseek-ai/schemastery": "~3.18.5",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@deepseek-ai/dsh-http-proxy": ">=0.2.0-rc.2",
+    "@deepseek-ai/dsh-home-paths": ">=0.2.0-rc.2",
+    "ipaddr.js": ">=2.0.0"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/dsh-llm": {
@@ -91,6 +94,15 @@
       "optional": true
     },
     "zod": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-http-proxy": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-home-paths": {
+      "optional": true
+    },
+    "ipaddr.js": {
       "optional": true
     }
   },

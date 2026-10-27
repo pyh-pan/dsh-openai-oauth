@@ -11,10 +11,30 @@ export class SiwcController {
   #closed = false;
   #current;
   constructor(
-    { accounts, protocol, sessions, onSelection, readNotice, readCoverage },
+    {
+      accounts,
+      protocol,
+      sessions,
+      onSelection,
+      readNotice,
+      readCoverage,
+      readDirectory,
+      readNetwork,
+      refreshModels,
+    },
     options = {},
   ) {
-    Object.assign(this, { accounts, protocol, sessions, onSelection, readNotice, readCoverage });
+    Object.assign(this, {
+      accounts,
+      protocol,
+      sessions,
+      onSelection,
+      readNotice,
+      readCoverage,
+      readDirectory,
+      readNetwork,
+    });
+    this.refreshDirectory = refreshModels;
     this.options = options;
   }
   #assertOpen() {
@@ -30,6 +50,8 @@ export class SiwcController {
       selection: await this.accounts.selection(),
       attempt: this.#current?.status ?? null,
       notice: this.readNotice?.() ?? null,
+      directory: this.readDirectory?.() ?? null,
+      network: this.readNetwork?.() ?? null,
       ...(this.readCoverage ? { coverage: await this.readCoverage() } : {}),
       // Never serialize the AccountStore or the protocol instance.
     };
@@ -41,6 +63,11 @@ export class SiwcController {
     try {
       const hostId = await this.accounts.hostId();
       const registration = key === undefined ? undefined : await this.accounts.registration(key);
+      if (
+        registration?.renewal?.state === 'revoking' &&
+        registration.renewal.expiresAt > (this.accounts.now?.() ?? Date.now())
+      )
+        reject('AUTH_BUSY', 409);
       this.#assertOpen();
       const attempt = new OAuthAttempt(this.protocol, {
         hostId,
@@ -72,6 +99,12 @@ export class SiwcController {
     this.#assertOpen();
     const selection = await this.accounts.select(key);
     await this.onSelection?.(selection);
+  }
+  async refreshModels(signal, renewAuthorization = false) {
+    this.#assertOpen();
+    if (this.#starting || activePhase(this.#current?.status.phase)) reject('AUTH_BUSY', 409);
+    if (!this.refreshDirectory) reject('MODEL_CATALOG_UNAVAILABLE', 503);
+    return this.refreshDirectory(signal, { renewAuthorization });
   }
   async logout(key) {
     this.#assertOpen();
@@ -143,6 +176,13 @@ export function createSiwcHandler(controller) {
         case 'acknowledge':
           await controller.accounts.acknowledgeWelcome(body.key);
           break;
+        case 'refresh-models': {
+          const maintenance = await controller.refreshModels(
+            request.signal,
+            body.renewAuthorization === true,
+          );
+          return json({ ...(await controller.snapshot()), maintenance });
+        }
         case 'logout': {
           const result = await controller.logout(body.key);
           return json({ ...(await controller.snapshot()), logout: result });

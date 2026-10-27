@@ -328,7 +328,9 @@ test('unrecoverable auth failure keeps authorization and gives model preparation
     return true;
   });
   assert.equal(calls, 2);
-  assert.deepEqual(await f.accounts.registration(f.key), before);
+  const { renewal, ...retained } = await f.accounts.registration(f.key);
+  assert.deepEqual(retained, before);
+  assert.equal(renewal.state, 'retryable');
 });
 
 test('concurrent callers share one safe recovery and commit one rotating refresh', async (t) => {
@@ -354,7 +356,9 @@ test('ambiguous refresh failure is never replayed and does not erase the saved g
   const before = await f.accounts.registration(f.key);
   await assert.rejects(f.sessions.access(f.key), { code: 'AUTH_REQUEST_UNCONFIRMED' });
   assert.equal(calls, 1);
-  assert.deepEqual(await f.accounts.registration(f.key), before);
+  const { renewal, ...retained } = await f.accounts.registration(f.key);
+  assert.deepEqual(retained, before);
+  assert.equal(renewal.state, 'uncertain');
 });
 
 test('caller cancellation during retry backoff stops the second exchange', async () => {
@@ -410,7 +414,7 @@ test('cancelling model preparation leaves its maintenance refresh to commit, wit
   await pause(0);
   abort.abort(new Error('PRIVATE_ABORT'));
   await result;
-  await f.accounts.credentials.shared.queue;
+  await f.sessions.drain();
   assert.equal(calls, 2);
   assert.equal((await f.accounts.registration(f.key)).refreshToken, 'test-refresh-token');
 });

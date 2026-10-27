@@ -201,7 +201,9 @@ for (const remoteCode of ['temporarily_unavailable', 'invalid_client'])
     await assert.rejects(sessions.access(key), {
       code: remoteCode === 'invalid_client' ? 'INVALID_CLIENT' : 'TOKEN_EXCHANGE_FAILED',
     });
-    assert.deepEqual(await accounts.registration(key), before);
+    const { renewal, ...retained } = await accounts.registration(key);
+    assert.deepEqual(retained, before);
+    assert.equal(renewal.state, remoteCode === 'invalid_client' ? 'retryable' : 'uncertain');
   });
 
 test('refresh validates new ID token identity before replacing a selected account', async (t) => {
@@ -383,7 +385,7 @@ test('refresh maintenance has a total deadline and never destroys tokens on time
   };
   const { sessions, accounts, key } = await setup({ protocol, maintenanceTimeoutMs: 15 });
   t.after(() => sessions.dispose());
-  await assert.rejects(sessions.access(key), { code: 'NETWORK_TIMEOUT' });
+  await assert.rejects(sessions.access(key), { code: 'AUTH_REQUEST_UNCONFIRMED' });
   assert.equal((await accounts.registration(key)).refreshToken, 'old-refresh');
 });
 

@@ -130,50 +130,49 @@ export async function verifyNativeModelSelection(asar) {
       assert.equal(selected.reasoningEffort, 'high');
       assert.equal(authCalls, 0);
       now += expired ? 121001 : 61000;
-      if (expired) {
-        await assert.rejects(select('low'), (error) => {
-          assert.equal(error.code, 'session/model-unavailable');
-          assert.match(error.message, /not automatically replayed/);
-          assertSafeDiagnostic(error.message, 'expired');
-          return true;
-        });
-        assert.equal(selected.reasoningEffort, 'high');
-        assert.equal(authCalls, 1);
-      } else {
-        assert.equal((await select('low')).selected.reasoningEffort, 'low');
-        assert.equal(authCalls, 0, 'unexpired catalog access must not proactively rotate');
-        assert.equal(catalogCalls, 2, 'the expired directory itself is still refreshed');
-        await assert.rejects(select('invented'), (error) => {
-          assert.equal(error.code, 'session/model-unavailable');
-          assert.match(error.message, /does not support reasoning effort/);
-          return true;
-        });
-        assert.equal(selected.reasoningEffort, 'low');
-        const call = await ctx.llm.prepareCall({
+      assert.equal((await select('low')).selected.reasoningEffort, 'low');
+      assert.equal(authCalls, 0, 'local model/effort selection must not renew even expired access');
+      assert.equal(catalogCalls, 1, 'retained selection metadata must not refetch after TTL');
+      await assert.rejects(select('invented'), (error) => {
+        assert.equal(error.code, 'session/model-unavailable');
+        assert.match(error.message, /does not support reasoning effort/);
+        return true;
+      });
+      assert.equal(selected.reasoningEffort, 'low');
+      await assert.rejects(
+        ctx.llm.prepareCall({
           provider: PROVIDER,
           model: 'fixture-reasoning',
           reasoningEffort: 'low',
-        });
-        const output = [];
-        for await (const chunk of call.stream({
-          ...call.config,
-          messages: [
-            native.createUserMessage({
-              source: { kind: 'user' },
-              content: [{ type: 'text', text: 'synthetic only' }],
-            }),
-          ],
-        }))
-          output.push(chunk);
-        assert.equal(output.at(-1).reason.failure.code, 'AUTH_REQUEST_UNCONFIRMED');
-        assertSafeDiagnostic(output.at(-1).reason.failure.message, 'unexpired');
-        assert.equal(authCalls, 1, 'actual Responses readiness retains proactive refresh');
-      }
+        }),
+        (error) => {
+          assert.equal(error.code, 'AUTH_REQUEST_UNCONFIRMED');
+          assertSafeDiagnostic(error.message, expired ? 'expired' : 'unexpired');
+          return true;
+        },
+      );
+      assert.equal(authCalls, 1, 'actual preparation keeps proactive/expired refresh requirements');
+      await assert.rejects(
+        ctx.llm.prepareCall({
+          provider: PROVIDER,
+          model: 'fixture-reasoning',
+          reasoningEffort: 'low',
+        }),
+        { code: 'ACCOUNT_RENEWAL_UNCONFIRMED' },
+      );
+      assert.equal(
+        authCalls,
+        1,
+        'a later native preparation cannot replay the uncertain generation',
+      );
+      assert.equal((await select('high')).selected.reasoningEffort, 'high');
       assert.equal(responseCalls, 0);
+      const { renewal, ...retained } = await accounts.registration(key);
+      assert.equal(renewal.state, 'uncertain');
       assert.deepEqual(
-        await accounts.registration(key),
+        retained,
         before,
-        'an ambiguous refresh never erases the grant',
+        'an uncertain operation keeps credentials behind its durable fence',
       );
     } finally {
       adapter.dispose();
@@ -185,6 +184,8 @@ export async function verifyNativeModelSelection(asar) {
     nativeReasoningSelection: true,
     nativeAuthDiagnosticPreserved: true,
     unexpiredCatalogDoesNotRotate: true,
+    expiredAccessDoesNotBlockRetainedSelection: true,
+    retainedCatalogSelectionMakesNoRequest: true,
     reasoningChangeAfterCatalogExpiry: true,
     unsupportedEffortStillDenied: true,
     inferenceKeepsRefreshMargin: true,

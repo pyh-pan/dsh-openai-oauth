@@ -16,12 +16,14 @@ import { verifyProfileCompatibility } from './native-profile-compatibility.mjs';
 import { verifyNativeRequestPolicy } from './native-request-policy.mjs';
 import { verifyNativeAttachments } from './native-attachments.mjs';
 import { verifyNativeModelSelection } from './native-model-selection.mjs';
+import { verifyNativeRenewalSafety } from './native-renewal-safety.mjs';
 
 const asar = process.env.DSH_ASAR;
 if (!asar) throw new Error('Set DSH_ASAR');
 const profileCompatibility = await verifyProfileCompatibility(asar);
 const attachmentChecks = await verifyNativeAttachments(asar);
 const modelSelectionChecks = await verifyNativeModelSelection(asar);
+const renewalSafetyChecks = await verifyNativeRenewalSafety(asar);
 const req = createRequire(pathToFileURL(join(asar, 'package.json')));
 const { Context } = req('@deepseek-ai/cordis');
 const schemaModule = req('@deepseek-ai/schemastery');
@@ -260,6 +262,7 @@ try {
       ...profileCompatibility,
       ...attachmentChecks,
       ...modelSelectionChecks,
+      ...renewalSafetyChecks,
       nativeServices: true,
       nativeRequestPolicySchema,
       hostOwnedBoundedRetryPolicy: true,

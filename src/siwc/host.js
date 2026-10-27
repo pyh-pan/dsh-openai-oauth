@@ -100,7 +100,12 @@ export function createHostPlugin(
           closed = true;
           controller?.dispose();
           adapter?.dispose();
-          await runtime?.sessions.dispose?.();
+          try {
+            await runtime?.sessions.dispose?.();
+          } finally {
+            runtime?.network?.dispose?.();
+            await runtime?.catalogCache?.dispose?.();
+          }
         },
         'chatgpt-subscription: lifetime',
       );
@@ -130,7 +135,7 @@ export function createHostPlugin(
         integration = unavailablePresetIntegration(error);
       }
       if (closed) return;
-      runtime = createRuntime(ctx);
+      runtime = createRuntime(ctx, { requestPolicy });
       adapter = new Adapter({
         ...runtime,
         requestPolicy,
@@ -142,6 +147,11 @@ export function createHostPlugin(
         startupError = 'DSH_ADAPTER_HANDLE_CONTRACT_CHANGED';
         throw new Error(startupError);
       }
+      runtime.ready
+        ?.then(() => {
+          if (!closed) handle.replace([PROVIDER]);
+        })
+        .catch(() => {});
       const changed = () => {
         if (!closed) {
           adapter.invalidate();
@@ -152,6 +162,13 @@ export function createHostPlugin(
         {
           ...runtime,
           readNotice: () => adapter.notice,
+          readDirectory: () => adapter.directoryStatus,
+          readNetwork: runtime.readNetwork,
+          refreshModels: async (signal, options) => {
+            const result = await adapter.refreshModels(signal, options);
+            if (!closed) handle.replace([PROVIDER]);
+            return result;
+          },
           readCoverage: integration?.readCoverage,
           onSelection: async (selection) => {
             adapter.clearNotice();
@@ -166,9 +183,9 @@ export function createHostPlugin(
         if (key === SELECTION_KEY) {
           adapter.clearNotice();
           await runtime.sessions.selectionChanged?.(await runtime.accounts.selection());
-        } else if (typeof key === 'string' && key.startsWith(`${OWNER}/account-`))
-          await runtime.sessions.accountChanged?.(key);
-        else return;
+        } else if (typeof key === 'string' && key.startsWith(`${OWNER}/account-`)) {
+          if ((await runtime.sessions.accountChanged?.(key)) === false) return;
+        } else return;
         changed();
       });
     },

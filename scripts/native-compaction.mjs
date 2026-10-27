@@ -9,6 +9,7 @@ import { createRequire, registerHooks } from 'node:module';
 import { createAdapterClass } from '../src/siwc/adapter.js';
 import { COMPACTION_INSTRUCTION } from '../src/siwc/compaction-instruction.js';
 import { SAFETY_KEY } from '../src/siwc/compaction.js';
+import { verifyColdCompactionCatalog } from './native-compaction-catalog.mjs';
 
 const asar = process.env.DSH_ASAR;
 if (!asar) throw new Error('Set DSH_ASAR');
@@ -177,6 +178,7 @@ function fixture(id, owner = ctx) {
 }
 const eventsOf = (s) => s.snapshotEvents();
 try {
+  const coldCatalogChecks = await verifyColdCompactionCatalog(asar, Engine);
   // Provider Schema/retry contracts are separately tested by native-siwc so
   // this optional compaction change remains independently revertible.
   assert.throws(() => Engine.Config({ summaryTimeoutMs: 0 }));
@@ -355,6 +357,7 @@ try {
   console.log(
     JSON.stringify({
       nativeCompaction: 'passed',
+      ...coldCatalogChecks,
       serverCalls: 0,
       mockResponsesCalls: calls.length,
       originalConflictReproduced: true,

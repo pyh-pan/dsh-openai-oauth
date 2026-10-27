@@ -1,10 +1,15 @@
 import { COMPACTION_INSTRUCTION } from './compaction-instruction.js';
+import { withSignal } from './abortable.js';
 
 const PROVIDER = 'chatgpt-subscription';
 export const SAFETY_KEY = 'siwcCompactionSafety';
 const nonempty = (value) => typeof value === 'string' && value.length > 0;
 const fail = (code) => Object.assign(new Error(code), { code });
 const object = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+const conversationTarget = (agent) => agent.session.requestHeader()?.config;
+const protectedRoute = (config, agent) =>
+  conversationTarget(agent)?.provider === PROVIDER ||
+  summaryTarget(config, agent)?.provider === PROVIDER;
 
 // Resolve only the documented hook's route selection, not pressure/retention.
 // modelPolicies match the conversation route, NOT the summarizer route.
@@ -91,7 +96,7 @@ export function createCompactionClass(
       // closed attempt before this guard reads, including failures AFTER hook
       // return (not smaller, changed history, commit failure). No duplicate backend.
       ctx.on('agent/pre-step', async ({ agent, signal }, next) => {
-        if (!signal.aborted && summaryTarget(this.config, agent)?.provider === PROVIDER) {
+        if (!signal.aborted && protectedRoute(this.config, agent)) {
           const state = ctx.sessionProjections.stateOf(agent.session, SAFETY_KEY);
           if (state === undefined) throw fail('DSH_SIWC_COMPACTION_SAFETY_MISSING');
           if (state.failed || this._siwcFailedPressure.has(agent.session)) {
@@ -118,11 +123,31 @@ export function createCompactionClass(
     // summarize() and therefore may have no failed compaction/end to project.
     async compactIfNeeded(agent, trigger, signal) {
       try {
+        const target = conversationTarget(agent);
+        if (trigger === 'pressure' && target?.provider === PROVIDER && nonempty(target.model)) {
+          if (typeof this.ctx.llm.prepareCall !== 'function')
+            throw fail('DSH_SIWC_COMPACTION_CAPABILITY_PREPARE_MISSING');
+          const combined = AbortSignal.any([
+            this._siwcSummaryClosed.signal,
+            ...(signal ? [signal] : []),
+          ]);
+          // Genuine pre-step only: prepare capabilities BEFORE native pressure
+          // needs context. Never dispatch this one-shot handle or write headers;
+          // the Agent still performs its own final preparation/request waterfall.
+          await withSignal(
+            () =>
+              this.ctx.llm.prepareCall(
+                { provider: target.provider, model: target.model },
+                combined,
+              ),
+            combined,
+          );
+        }
         const result = await super.compactIfNeeded(agent, trigger, signal);
         this._siwcFailedPressure.delete(agent.session);
         return result;
       } catch (error) {
-        if (!signal?.aborted && summaryTarget(this.config, agent)?.provider === PROVIDER)
+        if (!signal?.aborted && protectedRoute(this.config, agent))
           this._siwcFailedPressure.add(agent.session);
         throw error;
       }

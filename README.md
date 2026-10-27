@@ -11,7 +11,7 @@ Independent community plugin; not affiliated with OpenAI or DeepSeek. This is **
 ## Features
 
 - Continue with ChatGPT, dynamic Agent registration, persistent host identity, and verified ID Tokens.
-- Account-specific models and reasoning levels in **DSH's existing model selector**.
+- Account-specific verified model/reasoning metadata in **DSH's existing model selector**, without renewing authorization just to edit a local choice.
 - Public Responses streaming, verified image/document input, local function tools, tool results, and compatible history replay.
 - Multiple saved account/workspace registrations, explicit account selection, rotating refresh, and scoped sign-out.
 - Keeps DeepSeek Account, API-key providers, other sources, and existing sessions independent. No silent billing fallback.
@@ -24,14 +24,14 @@ Minimum Desktop requirement: `>=0.2.0-rc.2`. Development/install helpers require
 
 New release labels do not require an allowlist entry or a startup test subprocess. Loading uses the minimum floor; actual Interfaces, owner authentication and session protection decide capability. Unknown metadata and different component version strings alone do not disable a working Host. A broad loading range is not certification of every future release. See [forward compatibility](docs/forward-compatibility.md).
 
-| Environment                                      | Status                                                                                         |
-| ------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| Windows Desktop 0.2.1-rc.2                       | Native suites pass; initial UI recovery confirmed; hardened-startup recheck pending            |
-| Windows Desktop 0.2.1-rc.1 (0.2.0-rc.2 baseline) | Previously validated native suites and desktop source/account/selection                        |
-| macOS Desktop 0.2.1-rc.2 / 0.2.1-rc.1            | Native and real desktop validation pending for these releases; 0.2.0-rc.2 native suites passed |
-| macOS Desktop 0.2.1-rc.3                         | All four isolated native suites pass; Desktop acceptance pending                               |
-| Windows/macOS/Linux Node CI                      | Protocol/package tests only; not proof of desktop login or inference                           |
-| Older DSH, remote/headless Hosts, Linux Desktop  | Not currently claimed supported                                                                |
+| Environment                                      | Status                                                                                                                                |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Windows Desktop 0.2.1-rc.2                       | Native suites pass; initial UI recovery confirmed; hardened-startup recheck pending                                                   |
+| Windows Desktop 0.2.1-rc.1 (0.2.0-rc.2 baseline) | Previously validated native suites and desktop source/account/selection                                                               |
+| macOS Desktop 0.2.1-rc.2 / 0.2.1-rc.1            | Native and real desktop validation pending for these releases; 0.2.0-rc.2 native suites passed                                        |
+| macOS Desktop 0.2.1-rc.3                         | 0.3.7 source/settings/coverage UI confirmed; 0.3.8 real interaction failed; 0.3.9 native checks pass, real-account acceptance pending |
+| Windows/macOS/Linux Node CI                      | Protocol/package tests only; not proof of desktop login or inference                                                                  |
+| Older DSH, remote/headless Hosts, Linux Desktop  | Not currently claimed supported                                                                                                       |
 
 See [compatibility and verification](docs/compatibility.md). Do not bypass compatibility contracts or upgrade bundled framework dependencies to force compatibility.
 
@@ -60,7 +60,7 @@ For a clean/archive installation only. If the package is already linked to a che
 
 ```sh
 npm run pack
-npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.8-diagnostic.1.tgz
+npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.9.tgz
 ```
 
 Do not keep the old private bundle and this bundle enabled simultaneously: they deliberately preserve the same provider/credential identity. See [migration](docs/migration.md).
@@ -75,6 +75,14 @@ Do not keep the old private bundle and this bundle enabled simultaneously: they 
 6. Use **Manage usage** to review the Agent, quota, limits, and access at [ChatGPT Settings → Usage](https://chatgpt.com/settings/usage).
 
 Accounts without the granted direct-inference scope remain signed in but disabled for inference. Explicitly enable subscription inference to request consent again. Reauthorization reuses the registration; adding a different account is a separate action.
+
+### Authorization resilience (0.3.9)
+
+Model/effort selection can use previously verified, account-scoped metadata. This disk cache never supplies authorization, context capacity or attachment capabilities. Actual preparation and native pressure compaction obtain credential-bound runtime capabilities; unknown facts still fail closed. **Refresh status** is read-only; **Update model catalog** uses the network and renews only when needed; **Renew authorization** is explicit maintenance, never an unattended install test.
+
+The macOS direct connector uses only a recognized existing DNS policy, native proxy routing and strict original-host TLS; unknown/proxy/hosts-override routes and Windows remain with Host fetch. No global network settings are changed. Advanced native plugin configuration may select `requestPolicy.transport: host` to retain Host transport.
+
+Unconfirmed rotating-token outcomes are durably fenced, not automatically retried by the next caller. Verified grants and operation fences use credential payload schema v2: an old reader refuses them rather than ignoring their safety state. Do not hand-edit records or downgrade them to v1. An account affected by a previous unconfirmed renewal should be officially reauthorized first. See the [diagnosis, pi comparison, verification and rollout boundaries](docs/auth-resilience.md).
 
 ## Limits and security
 

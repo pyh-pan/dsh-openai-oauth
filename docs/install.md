@@ -69,8 +69,18 @@ Use this route only for a clean/archive installation with no existing checkout l
 
 ```sh
 npm run pack
-npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.8-diagnostic.1.tgz
+npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.9.tgz
 ```
+
+## Authorization recovery and payload v2 (0.3.9)
+
+Keep the active linked checkout untouched while developing/testing a replacement. After a new all-sessions-idle approval, Quit normally, update through native `add -w`, and verify the actual version/canonical link/selected bundle. Do not count a Node or public no-grant network check as real authorization recovery.
+
+If the old build already reported an unconfirmed renewal, complete official reauthorization for that registration before trying another refresh. No client can reconstruct an unknown old remote result from preserved local bytes. Model/effort edits do not renew authorization; a missing verified catalog requests explicit recovery instead of inventing models.
+
+**Refresh status** is read-only. **Update model catalog** may renew when necessary. **Renew authorization** intentionally forces maintenance and then reloads the catalog, without inference/revocation. It is only for an explicit user action or separately bounded approval; stop after an unconfirmed result instead of retrying the same old generation.
+
+New verified account payloads and durable refresh/revocation fences use schema v2. Older readers refuse them. Do not hand-edit schema/markers or present a source downgrade as a transparent data rollback. To retain native networking, configure `requestPolicy.transport: host` through the native plugin configuration rather than discarding the lifecycle protection. See [the complete diagnosis and verification boundaries](auth-resilience.md).
 
 ## Missing source and authorization settings after a DSH upgrade
 

@@ -2,6 +2,8 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 // Fixed, non-secret diagnostics. Never attach a transport cause, URL, body or token.
 export const AUTH_NETWORK_MESSAGES = Object.freeze({
+  AUTH_NETWORK_POLICY_BLOCKED:
+    'The authorization network route or address was blocked by policy. No TLS, origin or proxy protection was bypassed.',
   AUTH_DNS_FAILED:
     'Cannot resolve auth.openai.com after bounded retries. Check DNS and network access; existing authorization was kept.',
   AUTH_CONNECT_FAILED:
@@ -17,11 +19,14 @@ export const AUTH_NETWORK_MESSAGES = Object.freeze({
 });
 
 export class AuthNetworkError extends Error {
-  constructor(code) {
+  constructor(code, writeOutcome = 'unknown') {
     super(code);
     this.code = code;
+    this.writeOutcome = writeOutcome;
   }
 }
+const responseSignals = new WeakMap();
+export const authResponseSignal = (response) => responseSignals.get(response);
 const unknown = () => ({ code: 'AUTH_NETWORK_FAILED', beforeConnect: false });
 function classify(error, depth = 0) {
   if (!error || depth > 4) return unknown();
@@ -40,6 +45,15 @@ function classify(error, depth = 0) {
     return failures.find((item) => item.code === 'AUTH_TLS_FAILED') ?? unknown();
   }
   const code = error.code;
+  if (
+    [
+      'SIWC_ORIGIN_BLOCKED',
+      'SIWC_NETWORK_ADDRESS_BLOCKED',
+      'SIWC_REDIRECT_BLOCKED',
+      'SIWC_HOST_ROUTE_UNAVAILABLE',
+    ].includes(code)
+  )
+    return { code: 'AUTH_NETWORK_POLICY_BLOCKED', beforeConnect: false };
   if (['EAI_AGAIN', 'ENOTFOUND'].includes(code))
     return { code: 'AUTH_DNS_FAILED', beforeConnect: true };
   if (['UND_ERR_CONNECT_TIMEOUT', 'ECONNREFUSED', 'ENETUNREACH', 'EHOSTUNREACH'].includes(code))
@@ -84,7 +98,7 @@ function cancelBody(response) {
     /* A late response may already have released/locked its body. */
   }
 }
-function fetchAttempt(fetchImpl, url, options, signal) {
+function fetchAttempt(fetchImpl, url, options, signal, started) {
   return new Promise((resolve, reject) => {
     let settled = false;
     const finish = (callback, value) => {
@@ -99,6 +113,7 @@ function fetchAttempt(fetchImpl, url, options, signal) {
     Promise.resolve()
       .then(() => {
         signal.throwIfAborted();
+        started();
         return fetchImpl(url, { ...options, redirect: 'error', signal });
       })
       .then(
@@ -117,21 +132,43 @@ function fetchAttempt(fetchImpl, url, options, signal) {
 // response-body consumption. It remains below the SessionManager's 20s lock budget.
 // GET/HEAD may be replayed once; writes only after a proven pre-connect failure.
 // No automatic HTTP-status retry, TLS bypass, alternate origin or proxy override.
-export async function requestAuth(fetchImpl, url, options, timeoutMs) {
+export async function requestAuth(fetchImpl, url, options, timeoutMs, stateFor) {
   const deadline = AbortSignal.timeout(timeoutMs);
   const signal = options.signal ? AbortSignal.any([options.signal, deadline]) : deadline;
   const readOnly = ['GET', 'HEAD'].includes((options.method ?? 'GET').toUpperCase());
   for (let attempt = 0; attempt < 2; attempt++) {
+    let started = false;
     try {
-      return await fetchAttempt(fetchImpl, url, options, signal);
+      const response = await fetchAttempt(fetchImpl, url, options, signal, () => {
+        started = true;
+      });
+      if (response && typeof response === 'object') responseSignals.set(response, signal);
+      return response;
     } catch (error) {
-      if (options.signal?.aborted) throw new AuthNetworkError('CANCELLED');
-      if (deadline.aborted)
-        throw new AuthNetworkError(readOnly ? 'AUTH_NETWORK_TIMEOUT' : 'AUTH_REQUEST_UNCONFIRMED');
       const failure = classify(error);
+      let state;
+      try {
+        state = stateFor?.(signal);
+      } catch {
+        /* Unknown transport stays conservative. */
+      }
+      const notSent = !started || failure.beforeConnect || state?.writeOutcome === 'not_sent';
+      if (options.signal?.aborted)
+        throw new AuthNetworkError('CANCELLED', notSent ? 'not_sent' : 'unknown');
+      if (deadline.aborted)
+        throw new AuthNetworkError(
+          readOnly
+            ? 'AUTH_NETWORK_TIMEOUT'
+            : notSent
+              ? state?.stage === 'dns'
+                ? 'AUTH_DNS_FAILED'
+                : 'AUTH_CONNECT_FAILED'
+              : 'AUTH_REQUEST_UNCONFIRMED',
+          notSent ? 'not_sent' : 'unknown',
+        );
       if (
         attempt === 0 &&
-        failure.code !== 'AUTH_TLS_FAILED' &&
+        !['AUTH_TLS_FAILED', 'AUTH_NETWORK_POLICY_BLOCKED'].includes(failure.code) &&
         (readOnly || failure.beforeConnect)
       ) {
         try {
@@ -139,14 +176,19 @@ export async function requestAuth(fetchImpl, url, options, timeoutMs) {
         } catch {
           throw new AuthNetworkError(
             options.signal?.aborted ? 'CANCELLED' : 'AUTH_NETWORK_TIMEOUT',
+            failure.beforeConnect ? 'not_sent' : 'unknown',
           );
         }
         continue;
       }
       throw new AuthNetworkError(
-        readOnly || failure.beforeConnect || failure.code === 'AUTH_TLS_FAILED'
+        readOnly ||
+        notSent ||
+        failure.code === 'AUTH_TLS_FAILED' ||
+        failure.code === 'AUTH_NETWORK_POLICY_BLOCKED'
           ? failure.code
           : 'AUTH_REQUEST_UNCONFIRMED',
+        notSent ? 'not_sent' : 'unknown',
       );
     }
   }

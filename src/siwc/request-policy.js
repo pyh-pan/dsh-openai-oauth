@@ -10,6 +10,7 @@ export const DEFAULT_REQUEST_POLICY = Object.freeze({
   streamTotalTimeoutMs: 30 * 60000,
   catalogTimeoutMs: 15000,
   maxRetries: 5,
+  transport: 'auto',
   timing: false,
 });
 export const NORMAL_RETRY_CODES = Object.freeze([
@@ -36,7 +37,7 @@ export function normalizeRequestPolicy(value = {}) {
       invalid();
   if (!Number.isSafeInteger(policy.maxRetries) || policy.maxRetries < 0 || policy.maxRetries > 5)
     invalid();
-  if (typeof policy.timing !== 'boolean') invalid();
+  if (typeof policy.timing !== 'boolean' || !['auto', 'host'].includes(policy.transport)) invalid();
   // Raising one attempt's headers budget must explicitly reduce retries. This
   // bounds headers-only waiting to the old 60s * 6 attempts, NOT an end-to-end
   // step deadline: auth/catalog/backoff/streaming still have separate clocks.
@@ -201,6 +202,11 @@ export function createPluginConfig(Schema) {
           .default(5)
           .description(
             'Host-owned additional retries, integer 0..5 (default 5), normal mode only. Direct llm.stream calls remain single-attempt. Lifecycle and deterministic parameter failures are not retryable.',
+          ),
+        transport: Schema.string()
+          .default('auto')
+          .description(
+            'auto: follow native proxy routing; bounded configured-server DNS and private HTTPS for official direct routes. host: delegate all networking to Host fetch. Does not change global network settings.',
           ),
         timing: Schema.boolean()
           .default(false)

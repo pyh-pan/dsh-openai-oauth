@@ -29,6 +29,8 @@ The native registry's `inspectCompositions` is preferred. The older registry's p
 
 Unrelated fields, catalog models/reasoning options and ordinary additional plugins do not require a new plugin release. Known preset declarations preserve unrelated rows, metadata, configuration and expressions. Ambiguous backends, nested/dynamic compaction groups or incompatible retained instances do not gain approval from a broad version range.
 
+Public network/cache peers are optional and initialize independently of account management. Missing capabilities retain Host transport or memory-only metadata; unknown network-module execution fails the affected network operation rather than silently authorizing another route. On macOS a tightly bounded, shell-free OS DNS read is not a version check or test runner. No global dispatcher, DNS or TLS setting is rewritten. Persistent model/effort metadata never supplies credential, context or attachment authority, and real pressure preparation still reaches the native algorithm.
+
 Model-directory badges and coverage-report inventory are optional display capabilities. Missing badges do not remove the settings card. Missing inventory reports `unavailable`; it neither approves nor disables the separate real session guard. Necessary stream completion, credential atomicity, owner authentication, attachment integrity and compaction transaction checks remain strict.
 
 The existing settings route reports fixed initialization/coverage errors, without native paths or arbitrary exceptions. Client responses distinguish a missing Host route, access denial, malformed response and actual transport failure. A compatibility problem is not presented as proof of an expired authorization.

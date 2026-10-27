@@ -27,6 +27,20 @@ window.__ModuleLoader__.load({
       enable: '启用订阅推理',
       logout: '退出',
       refresh: '刷新状态',
+      refreshModels: '更新模型目录',
+      renewAuthorization: '主动更新授权',
+      renewalConfirmed: '授权续期与模型目录已更新，未发送推理请求。',
+      catalogHint:
+        '模型和推理强度选择只读已验证目录。更新目录会联网，必要时刷新授权；实际请求仍单独校验授权与能力。',
+      catalogCached: '当前使用上次验证的模型与推理强度目录；上下文和附件能力不从持久缓存恢复。',
+      renewalPending: '授权更新中',
+      renewalBlocked: '授权更新未确认 · 请重新授权',
+      renewalRetryable: '授权连接待重试',
+      revocationPending: '退出未完成 · 旧凭据已停用',
+      ACCOUNT_SIGNED_OUT: '此账号已退出或正在退出，旧凭据不会再用于请求。',
+      ACCOUNT_STORAGE_FAILED:
+        '无法保存授权状态。请检查本地存储后重试；不会输出凭据或自动重发旧刷新凭据。',
+      ACCOUNT_RECORD_INVALID: '本地授权记录不满足安全契约，请重新授权；不要导出或手工改写凭据。',
       manage: '管理用量',
       source: 'chatgpt-subscription',
       selectHint:
@@ -82,6 +96,14 @@ window.__ModuleLoader__.load({
       ACCOUNT_MISMATCH: '授权返回的账号与所选注册不一致，原凭据没有被替换。',
       DIRECT_PERMISSION_MISSING: '此账号未授予订阅推理权限，请显式选择“启用订阅推理”。',
       ACCOUNT_REAUTH_REQUIRED: '请重新授权此账号，或选择另一个已授权账号。',
+      ACCOUNT_RENEWAL_UNCONFIRMED:
+        '上次授权更新未确认，自动续期已停止，旧凭据未删除或重发。请为此账号重新授权。',
+      ACCOUNT_REFRESH_IN_PROGRESS: '授权更新正在进行，请稍后再试；未重复提交刷新凭据。',
+      ACCOUNT_REFRESH_REQUIRED:
+        '当前目录尚未就绪且授权需要更新。请在订阅设置中显式更新模型目录，或重新授权。',
+      MODEL_CATALOG_UNAVAILABLE: '当前账号没有可用的已验证模型目录，请在订阅设置中更新目录。',
+      AUTH_NETWORK_POLICY_BLOCKED:
+        'OpenAI 授权网络路由或地址校验未通过，请检查网络配置；没有绕过代理、TLS 或地址保护。',
       AUTH_DNS_FAILED:
         '无法解析 auth.openai.com，有限重试后仍失败。请检查 DNS 和网络；已有授权已保留。',
       AUTH_CONNECT_FAILED:
@@ -149,6 +171,23 @@ window.__ModuleLoader__.load({
       enable: 'Enable ChatGPT plan use',
       logout: 'Sign out',
       refresh: 'Refresh status',
+      refreshModels: 'Update model catalog',
+      renewAuthorization: 'Renew authorization',
+      renewalConfirmed: 'Authorization and model catalog updated. No inference request was sent.',
+      catalogHint:
+        'Model/effort selection reads verified metadata. Updating the catalog uses the network and may renew authorization. Actual requests independently verify authorization and capabilities.',
+      catalogCached:
+        'Using previously verified model/effort metadata. Context and attachment capabilities are not restored from disk.',
+      renewalPending: 'Renewing authorization',
+      renewalBlocked: 'Renewal unconfirmed · authorize again',
+      renewalRetryable: 'Authorization connection needs retry',
+      revocationPending: 'Sign-out incomplete · old credential blocked',
+      ACCOUNT_SIGNED_OUT:
+        'This account is signed out or signing out. Its old credential will not be used.',
+      ACCOUNT_STORAGE_FAILED:
+        'Authorization state could not be saved. Check local storage and retry. No credentials are exposed and old rotating credentials are not automatically replayed.',
+      ACCOUNT_RECORD_INVALID:
+        'The local authorization record does not meet its safety contract. Authorize again; do not export or hand-edit credentials.',
       manage: 'Manage usage',
       source: 'chatgpt-subscription',
       selectHint:
@@ -217,6 +256,16 @@ window.__ModuleLoader__.load({
       DIRECT_PERMISSION_MISSING:
         'ChatGPT plan use was not granted. Explicitly choose “Enable ChatGPT plan use”.',
       ACCOUNT_REAUTH_REQUIRED: 'Authorize this account again or choose another authorized account.',
+      ACCOUNT_RENEWAL_UNCONFIRMED:
+        'A previous renewal was not confirmed. Automatic renewal stopped without deleting or resending the old credential. Authorize this account again.',
+      ACCOUNT_REFRESH_IN_PROGRESS:
+        'Authorization renewal is in progress. Wait and retry; the rotating credential was not resubmitted.',
+      ACCOUNT_REFRESH_REQUIRED:
+        'No ready catalog is available and authorization needs renewal. Explicitly update the catalog in subscription settings, or authorize again.',
+      MODEL_CATALOG_UNAVAILABLE:
+        'No verified model catalog is available for this account. Update it in subscription settings.',
+      AUTH_NETWORK_POLICY_BLOCKED:
+        'The OpenAI authorization network route or address check failed. Review network settings; proxy, TLS and address protections were not bypassed.',
       AUTH_DNS_FAILED:
         'Cannot resolve auth.openai.com after bounded retries. Check DNS and network access; existing authorization was kept.',
       AUTH_CONNECT_FAILED:
@@ -298,7 +347,10 @@ window.__ModuleLoader__.load({
       const request = React.useCallback(async (body) => {
         const abort = new AbortController();
         requests.current.add(abort);
-        const timer = setTimeout(() => abort.abort(), body?.action === 'logout' ? 65000 : 20000);
+        const timer = setTimeout(
+          () => abort.abort(),
+          body?.action === 'logout' ? 65000 : body?.action === 'refresh-models' ? 45000 : 20000,
+        );
         try {
           const transport = globalThis.__DSH_TRANSPORT__?.fetch;
           const response = await (transport ?? globalThis.fetch.bind(globalThis))(
@@ -534,15 +586,22 @@ window.__ModuleLoader__.load({
           label,
         );
       const status = (account) =>
-        account.key === state?.selection?.key && account.inferenceEnabled
-          ? 'active'
-          : ({
-              authorized: 'available',
-              disabled: 'disabled',
-              pending: 'pending',
-              'signed-out': 'signedOut',
-              'reauth-required': 'reauth',
-            }[account.status] ?? 'reauth');
+        account.renewalState
+          ? ({
+              pending: 'renewalPending',
+              uncertain: 'renewalBlocked',
+              retryable: 'renewalRetryable',
+              revoking: 'revocationPending',
+            }[account.renewalState] ?? 'renewalBlocked')
+          : account.key === state?.selection?.key && account.inferenceEnabled
+            ? 'active'
+            : ({
+                authorized: 'available',
+                disabled: 'disabled',
+                pending: 'pending',
+                'signed-out': 'signedOut',
+                'reauth-required': 'reauth',
+              }[account.status] ?? 'reauth');
       let authorize;
       try {
         const url = new URL(attempt?.authorizeUrl);
@@ -773,7 +832,30 @@ window.__ModuleLoader__.load({
             },
             t('refresh'),
           ),
+          button(
+            t('refreshModels'),
+            { action: 'refresh-models' },
+            false,
+            running || !state?.selection,
+          ),
+          button(
+            t('renewAuthorization'),
+            { action: 'refresh-models', renewAuthorization: true },
+            false,
+            running ||
+              !accounts.some(
+                (account) =>
+                  account.key === state?.selection?.key &&
+                  account.renewable &&
+                  account.inferenceEnabled,
+              ),
+          ),
         ),
+        state?.selection && h('p', { className: 'cgs-small' }, t('catalogHint')),
+        state?.maintenance?.authorizationRenewed &&
+          h('p', { className: 'cgs-small', role: 'status' }, t('renewalConfirmed')),
+        state?.directory?.cached &&
+          h('p', { className: 'cgs-small', role: 'status' }, t('catalogCached')),
         h('p', { className: 'cgs-small' }, t('limits')),
         h('p', { className: 'cgs-small' }, t('preview')),
         welcome && h(Welcome, { key: welcome.key, account: welcome, t, busy, act }),

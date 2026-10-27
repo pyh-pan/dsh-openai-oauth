@@ -195,6 +195,7 @@ test('request policy retains all old clocks and finite native retry defaults', (
     streamTotalTimeoutMs: 1800000,
     catalogTimeoutMs: 15000,
     maxRetries: 5,
+    transport: 'auto',
     timing: false,
   });
   assert.deepEqual(normalizePluginConfig(), { requestPolicy: DEFAULT_REQUEST_POLICY });
@@ -276,6 +277,7 @@ test('public Config factory declares just requestPolicy and exposes its strict v
   });
   const Schema = {
     number: leaf,
+    string: leaf,
     boolean: leaf,
     any: leaf,
     object: (fields) => ({

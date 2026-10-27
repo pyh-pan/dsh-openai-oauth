@@ -11,7 +11,7 @@
 ## 功能
 
 - Continue with ChatGPT、动态 Agent 注册、持久化 host ID、完整 ID Token 校验。
-- 在 **DSH 原有模型选择器** 中选择账号实际可用的模型和推理档位。
+- 在 **DSH 原有模型选择器** 中使用账号已验证的模型和推理档位目录；编辑本地选项本身不刷新授权。
 - 公开 Responses 流式输出、校验后的图片/文档输入、本地 function 工具、工具结果与兼容历史重放。
 - 多账号/工作区注册隔离、显式选择账号、轮换刷新和限定退出。
 - 不覆盖 DeepSeek 账号/API 余额通道、其他源或现有会话，不静默切换计费源。
@@ -26,7 +26,7 @@ Desktop 最低要求：`>=0.2.0-rc.2`；开发/安装脚本要求 **Node.js 24+*
 
 - Windows：0.2.1-rc.2 原生回归通过，用户已确认初步修复后桌面入口恢复；后续启动防护加固的最终桌面复核待完成。保留 0.2.1-rc.1 / 0.2.0-rc.2 支持与此前验收记录。
 - macOS：0.2.0-rc.2 工程/原生合成测试此前通过；0.2.1-rc.1 / 0.2.1-rc.2 的新版原生回归及桌面实网验收待完成，不以 Windows 或 Node 测试替代。
-- macOS 0.2.1-rc.3：四项隔离原生检查通过；桌面验收待完成。
+- macOS 0.2.1-rc.3：0.3.7 的源/设置/覆盖 UI 已确认；0.3.8 的真实交互验收失败；0.3.9 四项隔离原生检查通过，真实账号验收尚待完成。
 - Windows/macOS/Linux CI 只证明 Node 协议/工程测试，不等于桌面授权、推理实测。
 - 暂不承诺旧 DSH、远程/headless Host 或 Linux Desktop。
 
@@ -55,7 +55,7 @@ npm run dsh -- plugin --profile desktop add -w .
 
 ```sh
 npm run pack
-npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.8-diagnostic.1.tgz
+npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.9.tgz
 ```
 
 不要同时启用原私有 bundle 和本项目：为保留既有授权，二者刻意使用同一 provider/凭据身份。切换步骤见 [迁移](docs/migration.md)。
@@ -70,6 +70,14 @@ npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth
 6. 点击 **管理用量**，在 [ChatGPT Settings → Usage](https://chatgpt.com/settings/usage) 查看本应用、额度、限制及访问管理。
 
 未授予订阅推理权限的身份可保留，但不能推理。显式“启用订阅推理”才重新请求 consent；普通重授权复用注册，不重复创建 Agent。添加其他账号则新建独立注册。
+
+### 授权故障整体修复（0.3.9）
+
+选择模型/档位可读取按账号隔离的已验证目录；持久目录不提供授权、上下文容量或附件能力。真实准备与原生 pressure compaction 取得凭据代际绑定的运行期能力，未知事实仍失败关闭。**刷新状态**只读；**更新模型目录**联网、必要时续期；**主动更新授权**是显式维护，不由无人值守安装触发。
+
+macOS 私有直连只使用可识别的现有 DNS 策略、原生代理路由和严格原域名 TLS；代理/hosts override/未知策略与 Windows 保留 Host fetch，不修改全局网络配置。高级原生插件配置可用 `requestPolicy.transport: host` 保留 Host 传输。
+
+未确认轮换结果会持久隔离，不由下一等待者自动重发旧 token。已验证授权及操作屏障使用 credential payload schema v2，旧 reader 会拒绝，而非忽略安全状态。不要手工改记录或降回 v1。此前已遇到未确认更新的账号应先在官方页面重新授权。完整证据、pi 对比、方案及尚未验证的边界见[诊断报告](docs/auth-resilience.md)。
 
 ## 限制与安全
 

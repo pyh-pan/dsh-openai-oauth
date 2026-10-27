@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { DIRECT_SCOPE, ISSUER, digest, reject, validClientId, validHostId } from './protocol.js';
+import { credentialGeneration } from './renewal.js';
 
 export const OWNER = 'chatgpt-subscription-login';
 export const HOST_KEY = `${OWNER}/host`;
@@ -14,7 +15,7 @@ const validKey = (key) =>
   key.startsWith(PREFIX) &&
   /^[a-f0-9]{64}$/.test(key.slice(PREFIX.length));
 const readPayload = (value) =>
-  value?.kind === 'grant' && value.payload?.schema === 1 ? value.payload : undefined;
+  value?.kind === 'grant' && [1, 2].includes(value.payload?.schema) ? value.payload : undefined;
 const checkSignal = (signal) => {
   if (signal?.aborted) reject('CANCELLED');
 };
@@ -22,8 +23,9 @@ const checkSignal = (signal) => {
 // All writes stay in this plugin's namespace. No credential enumeration outside
 // that namespace, no token reads from Pi/Codex, and no plain settings secrets.
 export class AccountStore {
-  constructor(credentials) {
+  constructor(credentials, { now = Date.now } = {}) {
     this.credentials = credentials;
+    this.now = now;
   }
   async hostId() {
     const saved = await this.credentials.modifyRecord(HOST_KEY, (current) => {
@@ -34,12 +36,26 @@ export class AccountStore {
     });
     return readPayload(saved).hostId;
   }
-  async registration(key) {
-    if (!validKey(key)) reject('ACCOUNT_NOT_FOUND', 404);
-    const payload = readPayload(await this.credentials.readRecord(key));
-    if (!payload || !validClientId(payload.clientId) || accountKey(payload.clientId) !== key)
+  assertRegistration(key, payload) {
+    if (
+      !validKey(key) ||
+      !payload ||
+      !validClientId(payload.clientId) ||
+      accountKey(payload.clientId) !== key
+    )
       reject('ACCOUNT_NOT_FOUND', 404);
     return payload;
+  }
+  async registration(key, { fresh = false } = {}) {
+    if (!validKey(key)) reject('ACCOUNT_NOT_FOUND', 404);
+    return this.assertRegistration(
+      key,
+      readPayload(
+        fresh
+          ? await this.credentials.modifyRecord(key, () => undefined)
+          : await this.credentials.readRecord(key),
+      ),
+    );
   }
   async beginRegistration(clientId, signal) {
     if (!validClientId(clientId)) reject('CLIENT_ID_INVALID');
@@ -75,6 +91,8 @@ export class AccountStore {
       const existing = readPayload(current);
       if (!existing || existing.clientId !== grant.clientId) reject('REGISTRATION_INCOMPLETE');
       if (existing.subject && existing.subject !== grant.subject) reject('ACCOUNT_MISMATCH');
+      if (existing.renewal?.state === 'revoking' && existing.renewal.expiresAt > this.now())
+        reject('AUTH_BUSY', 409);
       const {
         accessToken,
         refreshToken,
@@ -83,12 +101,20 @@ export class AccountStore {
         savedAt,
         scopes,
         tokenType,
+        renewal: _renewal,
+        credentialGeneration: _generation,
         ...mapping
       } = existing;
+      const {
+        renewal: _grantRenewal,
+        credentialGeneration: _grantGeneration,
+        ...validated
+      } = grant;
       return record({
         ...mapping,
-        ...grant,
-        schema: 1,
+        ...validated,
+        schema: 2,
+        credentialGeneration: credentialGeneration(existing) + 1,
         status: grant.scopes.includes(DIRECT_SCOPE) ? 'authorized' : 'disabled',
         updatedAt: Date.now(),
       });
@@ -108,12 +134,30 @@ export class AccountStore {
         label: `${account.email ?? account.displayName ?? 'ChatGPT'} · ${digest(account.clientId).slice(0, 8)}`,
         status: account.status,
         signedIn: ['authorized', 'disabled'].includes(account.status) && !!account.accessToken,
-        inferenceEnabled: account.status === 'authorized' && account.scopes?.includes(DIRECT_SCOPE),
+        inferenceEnabled:
+          account.status === 'authorized' &&
+          account.scopes?.includes(DIRECT_SCOPE) &&
+          !account.renewal,
+        permissionGranted: account.scopes?.includes(DIRECT_SCOPE) === true,
+        renewalState:
+          account.renewal?.state === 'pending' && account.renewal.expiresAt <= this.now()
+            ? 'uncertain'
+            : (account.renewal?.state ?? null),
         welcomeRequired: account.status === 'authorized' && !account.welcomeSeen,
         renewable: !!account.refreshToken,
       });
     }
     return accounts;
+  }
+  async catalogScope(selection) {
+    const account = await this.registration(selection.key, { fresh: true });
+    return {
+      scope: digest(
+        JSON.stringify([await this.hostId(), selection.key, account.issuer, account.subject]),
+      ),
+      allowed: account.status === 'authorized' && account.scopes?.includes(DIRECT_SCOPE) === true,
+      credentialGeneration: credentialGeneration(account),
+    };
   }
   async acknowledgeWelcome(key) {
     await this.registration(key);

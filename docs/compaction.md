@@ -37,6 +37,14 @@ The original ChatGPT subscription settings card shows four preset-definition sta
 
 No session/account identifiers, module paths, config, conditions, prompts or arbitrary errors enter the coverage report. A protected-but-paused session is distinct from an uncovered one. Zero live SIWC sessions produces **pending**, not a claim that a real historic session was tested. Refresh the existing settings card after opening the target session; do not send a real request just to make a status indicator green.
 
+## Cold-runtime selection metadata and pressure preparation (0.3.9)
+
+The original selector may read an account-scoped, previously verified model/effort directory without renewing authorization. That persistent directory deliberately has no context or attachment authority. Native pressure compaction runs in `agent/pre-step`, before the Agent's actual `Llm.prepareCall`; a restored session already has a durable request header, even when its history is short.
+
+For that actual SIWC conversation pressure target only, the compatible override first calls the public `Llm.prepareCall` to authorize and load live capability metadata, then executes the original pressure algorithm. It never dispatches that temporary handle, writes request/header/history, fabricates a capacity, or reuses the handle as the Agent's final request. A new/unrouted session or foreign conversation does not receive this warm-up. A different summary provider does not change the conversation's pressure target or disable its failure guard.
+
+The real rc.3 cold-session fixture reproduced `TargetPressureConfigError` before this change. It now passes, while failed authorization, a truly absent context capacity and cancellation still reject and retain original history. Source/package/native results remain distinct from real account recovery; see [authorization diagnosis](auth-resilience.md).
+
 ## Honest summary limits
 
 For the **finally resolved summary target** `provider=chatgpt-subscription`, including explicit summary routes and conversation `modelPolicies`:
@@ -71,16 +79,17 @@ The legacy `prepare:compaction` tool is retained only for explicit/manual compos
 
 ## Request timeouts and private diagnostics
 
-The public `requestPolicy` defaults are deliberately unchanged:
+The time/retry defaults remain unchanged; 0.3.9 additionally exposes an explicit transport choice:
 
-| Setting                    |   Default | Scope                                                                                                                   |
-| -------------------------- | --------: | ----------------------------------------------------------------------------------------------------------------------- |
-| `responseHeadersTimeoutMs` |    60,000 | Starts before JSON serialization/fetch, ends at Response arrival; earlier account/catalog/body projection is outside it |
-| `streamIdleTimeoutMs`      |   120,000 | SSE byte inactivity, not visible-token latency; pings can reset it                                                      |
-| `streamTotalTimeoutMs`     | 1,800,000 | Starts **after Response headers**, not end-to-end                                                                       |
-| `catalogTimeoutMs`         |    15,000 | Catalog headers/body and separate non-2xx Responses body deadline                                                       |
-| `maxRetries`               |         5 | Host-owned additional normal retries; no adapter retry loop                                                             |
-| `timing`                   |     false | Opt-in allowlisted local stage logs                                                                                     |
+| Setting                    |   Default | Scope                                                                                                                                                           |
+| -------------------------- | --------: | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `responseHeadersTimeoutMs` |    60,000 | Starts before JSON serialization/fetch, ends at Response arrival; earlier account/catalog/body projection is outside it                                         |
+| `streamIdleTimeoutMs`      |   120,000 | SSE byte inactivity, not visible-token latency; pings can reset it                                                                                              |
+| `streamTotalTimeoutMs`     | 1,800,000 | Starts **after Response headers**, not end-to-end                                                                                                               |
+| `catalogTimeoutMs`         |    15,000 | Catalog headers/body and separate non-2xx Responses body deadline                                                                                               |
+| `maxRetries`               |         5 | Host-owned additional normal retries; no adapter retry loop                                                                                                     |
+| `timing`                   |     false | Opt-in allowlisted local stage logs                                                                                                                             |
+| `transport`                |    `auto` | Native proxy routing; recognized macOS bounded direct mode, otherwise Host fetch. `host` retains Host fetch for every route; no global network settings change. |
 
 Safe positive-integer timer values and known keys are required. `maxRetries` is 0..5. Above 60s headers requires an explicit `maxRetries` of 0 or 1 and `(1 + maxRetries) × responseHeadersTimeoutMs <= 360,000`. A measured 180s/one-extra-retry candidate is possible, not automatically selected. Repair and verify compaction before relaxing timing.
 
@@ -108,4 +117,4 @@ The preset suite uses the installed native Loader, registry, real main entry and
 
 These checks are not proof of macOS GUI behavior, quota, large historic-session recovery or the impossibility of another network timeout. Real acceptance needs separate bounded approval. Start with small synthetic requests, no test retries, no full old history, and fail rather than expanding a budget automatically.
 
-Rollback uses the saved reviewed checkout and native `add -w`, at an agreed idle window. Restore an old local bundle only if its old provider explicitly needs it; 0.3.3's standard-only declaration does not fix an old cordis session. Retain history and user settings. Do not roll back an entire profile over newer user edits.
+Rollback uses a compatible saved reviewed checkout and native `add -w`, at an agreed idle window. Credential payload v2 in 0.3.9 must not be downgraded or have its safety markers erased; use `requestPolicy.transport: host` when retaining Host networking is the needed fallback, rather than loading an old reader over new safety records. Restore an old local bundle only if its old provider explicitly needs it; 0.3.3's standard-only declaration does not fix an old cordis session. Retain history and user settings. Do not roll back an entire profile over newer user edits.

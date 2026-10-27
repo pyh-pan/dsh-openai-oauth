@@ -3,6 +3,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { DSH_COMPATIBILITY_RANGE } from './host.mjs';
+import { assertProductionImports } from './source-import-contract.mjs';
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const files = [];
 function walk(dir) {
@@ -25,12 +26,7 @@ for (const [name, range] of Object.entries(pkg.peerDependencies ?? {}))
   if (name.startsWith('@deepseek-ai/dsh-') && range !== DSH_COMPATIBILITY_RANGE)
     throw Error(`Keep the Host peer synchronized with the minimum policy: ${name}`);
 for (const file of files.filter((file) => file.startsWith('src/')))
-  if (
-    /(?:from\s*|import\s*\(?\s*)['"](?:node:child_process|[^'"]*scripts\/)/.test(
-      readFileSync(join(root, file), 'utf8'),
-    )
-  )
-    throw Error(`Production code must not import process/test helpers: ${file}`);
+  assertProductionImports(file, readFileSync(join(root, file), 'utf8'));
 for (const file of ['README.md', 'README.zh.md', 'docs/forward-compatibility.md'])
   if (!readFileSync(join(root, file), 'utf8').includes(DSH_COMPATIBILITY_RANGE))
     throw Error(`Documented compatibility range differs from shared policy: ${file}`);

@@ -93,7 +93,11 @@ async function setup({ response, models, idleTimeoutMs, noSelection = false, fet
     access: async (selected, { signal }) => {
       assert.equal(selected, (await accounts.selection()).key);
       if (signal?.aborted) throw signal.reason;
-      return { accessToken: (await accounts.registration(selected)).accessToken };
+      const account = await accounts.registration(selected);
+      return {
+        accessToken: account.accessToken,
+        credentialGeneration: account.credentialGeneration,
+      };
     },
   };
   const adapter = new Adapter({
