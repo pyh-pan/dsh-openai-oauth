@@ -27,6 +27,7 @@ Desktop 最低要求：`>=0.2.0-rc.2`；开发/安装脚本要求 **Node.js 24+*
 - Windows：0.2.1-rc.2 原生回归通过，用户已确认初步修复后桌面入口恢复；后续启动防护加固的最终桌面复核待完成。保留 0.2.1-rc.1 / 0.2.0-rc.2 支持与此前验收记录。
 - macOS：0.2.0-rc.2 工程/原生合成测试此前通过；0.2.1-rc.1 / 0.2.1-rc.2 的新版原生回归及桌面实网验收待完成，不以 Windows 或 Node 测试替代。
 - macOS 0.2.1-rc.3：0.3.7 的源/设置/覆盖 UI 已确认；0.3.8 的真实交互验收失败；0.3.9 四项隔离原生检查通过，真实账号验收尚待完成。
+- macOS 0.2.2-rc.1：0.3.10 适配新版 Cordis 预设配置事件；源码/打包及四套原生检查通过，GUI 与真实账号验收待完成。
 - Windows/macOS/Linux CI 只证明 Node 协议/工程测试，不等于桌面授权、推理实测。
 - 暂不承诺旧 DSH、远程/headless Host 或 Linux Desktop。
 
@@ -55,7 +56,7 @@ npm run dsh -- plugin --profile desktop add -w .
 
 ```sh
 npm run pack
-npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.9.tgz
+npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.10.tgz
 ```
 
 不要同时启用原私有 bundle 和本项目：为保留既有授权，二者刻意使用同一 provider/凭据身份。切换步骤见 [迁移](docs/migration.md)。

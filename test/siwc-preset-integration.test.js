@@ -146,6 +146,102 @@ test('failed compaction blocks prepared conversation calls but admits explicit r
   });
 });
 
+// Exercise the real install/reconcile hook, not only definition adaptation.
+// DSH 0.2.2 supplies the Fiber as an argument with a null event receiver;
+// historical Hosts supplied raw config and bound the Fiber as the receiver.
+for (const contract of ['explicit-fiber', 'receiver-fiber'])
+  test(`${contract} config hooks reconcile presets and restore only current raw declarations`, async () => {
+    const ctx = coverageFixture();
+    class NativePreset {}
+    let hook,
+      dispose,
+      removed = false;
+    const updates = [];
+    ctx.on = (event, callback) => {
+      assert.equal(event, 'internal/config');
+      hook = callback;
+      return () => {
+        removed = true;
+      };
+    };
+    ctx.effect = (start) => {
+      dispose = start();
+    };
+    const resolve = (fiber, candidate = fiber.config) => {
+      if (removed) return candidate;
+      return contract === 'explicit-fiber'
+        ? hook.call(null, fiber, () => candidate)
+        : hook.call(fiber, candidate, () => candidate);
+    };
+    const makeFiber = (raw, callback = NativePreset) => ({
+      runtime: { callback },
+      config: raw,
+      await: async () => {},
+      update(config, noSave) {
+        updates.push({ fiber: this, config, noSave });
+        // Native update resolves before committing the candidate as raw config.
+        const resolved = resolve(this, config);
+        this.config = config;
+        this.effectiveConfig = resolved;
+      },
+    });
+    const raw = definition();
+    const original = structuredClone(raw);
+    const fiber = makeFiber(raw);
+    const entry = {
+      options: { name: '@deepseek-ai/dsh-agent-preset', config: raw },
+      fiber,
+    };
+    fiber.entry = entry;
+    ctx.loader = { entries: () => [entry] };
+    const integration = await installPresetIntegration(ctx, NativePreset, moduleName);
+    try {
+      assert.equal(fiber.effectiveConfig.plugins[1].config[0].name, moduleName);
+      assert.deepEqual(raw, original);
+      assert.equal(entry.options.config, raw);
+      assert.deepEqual(updates, [{ fiber, config: raw, noSave: true }]);
+      integration.assertCoverage('live');
+
+      // Resolve the waterfall's candidate, not a Fiber's previously stored config.
+      const candidate = definition('minimal');
+      assert.equal(resolve(fiber, candidate).id, 'minimal');
+      assert.equal(candidate.plugins[1].config[0].name, NATIVE_COMPACTION);
+      assert.equal(fiber.config, raw);
+
+      // New unlisted declarations must also be restored on unload.
+      const futureRaw = definition('ptc');
+      const future = makeFiber(futureRaw);
+      assert.equal(resolve(future).plugins[1].config[0].name, moduleName);
+      const futureNext = definition('minimal');
+      future.update(futureNext, true);
+      assert.equal(future.effectiveConfig.id, 'minimal');
+
+      const otherRaw = definition('standard');
+      const unrelated = makeFiber(otherRaw, class OtherPlugin {});
+      assert.equal(resolve(unrelated), otherRaw);
+      const customRaw = definition('custom');
+      assert.equal(resolve(makeFiber(customRaw)), customRaw);
+
+      // Prefer the latest Loader declaration, not an earlier resolve candidate.
+      const latest = definition('standard');
+      entry.options.config = latest;
+      const beforeDispose = updates.length;
+      dispose();
+      assert.equal(removed, true);
+      assert.deepEqual(updates.slice(beforeDispose), [
+        { fiber, config: latest, noSave: true },
+        { fiber: future, config: futureNext, noSave: true },
+      ]);
+      assert.equal(fiber.effectiveConfig, latest);
+      assert.equal(future.effectiveConfig, futureNext);
+      assert.throws(() => integration.assertCoverage('live'), { code: 'PLUGIN_DISPOSED' });
+      dispose();
+      assert.equal(updates.length, beforeDispose + 2);
+    } finally {
+      dispose();
+    }
+  });
+
 for (const kind of ['deadline', 'disposal'])
   test(`preset reconciliation ${kind} is bounded without late updates`, async (t) => {
     t.mock.timers.enable({ apis: ['setTimeout'] });

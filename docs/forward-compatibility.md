@@ -25,6 +25,8 @@ Production imports only the provider implementation and its Host peers. It never
 
 The native registry's `inspectCompositions` is preferred. The older registry's public retained-mount readers are an explicit Adapter for the same inspection; they also prove runtime-root membership. Neither path guesses from a creation header or copies the compaction engine. Unsupported custom declarations remain unmodified and their uncovered session requests remain blocked.
 
+The preset configuration hook accepts the current explicit Fiber argument and the historical Fiber receiver/raw configuration signature. It still targets only the imported native `AgentPreset` class and adapts the waterfall's resolved candidate, while keeping raw declarations separate for `noSave` restoration. Neither signature is selected by release metadata. See the [0.2.2-rc.1 diagnosis and evidence](compatibility.md#desktop-022-rc1-preset-safety-initialization-fails).
+
 ## Additive changes and optional capabilities
 
 Unrelated fields, catalog models/reasoning options and ordinary additional plugins do not require a new plugin release. Known preset declarations preserve unrelated rows, metadata, configuration and expressions. Ambiguous backends, nested/dynamic compaction groups or incompatible retained instances do not gain approval from a broad version range.

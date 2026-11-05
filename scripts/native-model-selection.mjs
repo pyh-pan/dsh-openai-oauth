@@ -34,14 +34,15 @@ function assertSafeDiagnostic(message, tokenState) {
 export async function verifyNativeModelSelection(asar) {
   const req = createRequire(pathToFileURL(join(asar, 'dsh/package.json')));
   const load = (name) => import(pathToFileURL(req.resolve('@deepseek-ai/' + name)).href);
-  const [{ Context }, native, nativeSessions, projections, api, registry] = await Promise.all([
-    load('cordis'),
-    load('dsh-llm'),
-    load('dsh-session'),
-    load('dsh-session-projection'),
-    load('dsh-api-session-controller'),
-    load('dsh-typert-registry'),
-  ]);
+  const [{ Context, Service }, native, nativeSessions, projections, api, registry] =
+    await Promise.all([
+      load('cordis'),
+      load('dsh-llm'),
+      load('dsh-session'),
+      load('dsh-session-projection'),
+      load('dsh-api-session-controller'),
+      load('dsh-typert-registry'),
+    ]);
   const Adapter = createAdapterClass(native);
   for (const expired of [false, true]) {
     let now = NOW,
@@ -105,19 +106,28 @@ export async function verifyNativeModelSelection(asar) {
       // Create the disposable Session before the API's list observers register.
       const session = ctx.sessions.create('synthetic-reasoning-session');
       const controller = new api.SessionController(ctx, {});
+      // Newer native services initialize after construction. Honor the actual
+      // lifecycle before replacing this fixture's Agent ownership/persistence.
+      await controller[Service.init]?.();
       const agent = {
         id: session.id,
         session,
         ctx,
         options: { provider: PROVIDER, model: 'fixture-reasoning' },
+        model: {
+          select(value) {
+            selected = value;
+          },
+        },
       };
       // Substitute only Agent ownership/persistence; the real public selection,
       // availability check, Llm normalization and adapter path remain untouched.
       controller.agents.resolveAgent = async () => ({ agent });
       controller.agents.serializeImageAdmission = async (_agent, work) => work();
-      controller.agents.selectForNextRequest = (_agent, value) => {
-        selected = value;
-      };
+      if (typeof controller.agents.selectForNextRequest === 'function')
+        controller.agents.selectForNextRequest = (_agent, value) => {
+          selected = value;
+        };
       ctx.llm.registerAdapter([PROVIDER], adapter);
       const select = (reasoningEffort) =>
         controller.selectModel({

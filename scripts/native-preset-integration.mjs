@@ -412,9 +412,36 @@ try {
   const late = fixture('late-minimal', 'minimal'),
     lateAgent = await bind('minimal', late.s);
   integration.assertCoverage(lateAgent.id);
+  // Direct native declarations have no Loader entry to supply their latest raw
+  // config. Native update resolves first, then commits raw; unload must not
+  // restore the value observed before that commit or an uncommitted candidate.
+  ctx.loader.remove('preset-minimal');
+  await ctx.loader.await();
+  const directRaw = definition('minimal');
+  const direct = await ctx.plugin(Preset, directRaw);
+  assert.equal(direct.entry, undefined);
+  if (typeof direct.resolveConfig === 'function') {
+    const candidate = definition('minimal');
+    candidate.name = 'Uncommitted candidate';
+    assert.equal(direct.resolveConfig(candidate).plugins[0].config[0].name, moduleName);
+    assert.equal(direct.config, directRaw);
+  }
+  const directNext = definition('minimal');
+  directNext.name = 'Latest committed direct preset';
+  await direct.update(directNext, true);
+  await direct.await();
+  assert.equal(direct.config, directNext);
+  assert.equal(direct.effectiveConfig.plugins[0].config[0].name, moduleName);
   // Removing integration restores raw declarations only for future bindings.
   await owner.dispose();
   await ctx.loader.await();
+  await direct.await();
+  assert.equal(direct.config, directNext);
+  assert.equal(direct.effectiveConfig.name, directNext.name);
+  assert.equal(
+    direct.effectiveConfig.plugins[0].config[0].name,
+    '@deepseek-ai/dsh-compaction-basic',
+  );
   console.log(
     JSON.stringify({
       nativeUnifiedPresetIntegration: 'passed',
@@ -425,6 +452,7 @@ try {
       automaticCompactionAllPresets: true,
       childRetainsCoveredRealm: true,
       futureDeclarationsCovered: true,
+      directPresetUpdateAndUnloadPreserveLatestRaw: true,
       legacyBundleConfigAdopted: true,
       legacyBundleRemovalRecomposition: true,
       failedSummariesBlockAllPresets: true,
