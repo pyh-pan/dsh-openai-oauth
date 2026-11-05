@@ -215,13 +215,19 @@ export async function installPresetIntegration(ctx, NativePreset, moduleName, in
   const updated = new Map();
   const off = ctx.on(
     'internal/config',
-    function (_raw, next) {
+    function (subject, next) {
       const config = next();
-      if (closed || this.runtime?.callback !== NativePreset) return config;
+      // Newer Cordis passes the Fiber explicitly with a null receiver; older
+      // Hosts bind the Fiber as `this` and pass raw config. Follow the actual
+      // event shape, never a release label, and only adapt the native class.
+      const fiber = this?.runtime ? this : subject;
+      if (closed || fiber?.runtime?.callback !== NativePreset) return config;
       const adapted = adaptPresetDefinition(config, moduleName);
       if (!adapted.supported) return config;
-      // Include declarations created after initial installation as well.
-      updated.set(this, { raw: _raw, entry: this.entry });
+      // Include future declarations. Explicit-Fiber hooks run before update
+      // commits raw config, so read its current value only when restoring.
+      const readRaw = () => (fiber === subject ? fiber.config : subject);
+      updated.set(fiber, { readRaw, entry: fiber.entry });
       return adapted.config;
     },
     { global: true },
@@ -234,10 +240,10 @@ export async function installPresetIntegration(ctx, NativePreset, moduleName, in
     off();
     // Public noSave update restores raw declarations for future bindings.
     // Native registry revision retention owns existing Agents; never rebind them.
-    for (const [fiber, { raw, entry }] of updated) {
+    for (const [fiber, { readRaw, entry }] of updated) {
       try {
         if (fiber.runtime?.callback === NativePreset)
-          fiber.update(entry?.fiber === fiber ? entry.options.config : raw, true);
+          fiber.update(entry?.fiber === fiber ? entry.options.config : readRaw(), true);
       } catch {
         /* owning preset may already have been removed */
       }

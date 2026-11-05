@@ -69,7 +69,7 @@ Use this route only for a clean/archive installation with no existing checkout l
 
 ```sh
 npm run pack
-npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.9.tgz
+npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.10.tgz
 ```
 
 ## Authorization recovery and payload v2 (0.3.9)

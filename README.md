@@ -30,6 +30,7 @@ New release labels do not require an allowlist entry or a startup test subproces
 | Windows Desktop 0.2.1-rc.1 (0.2.0-rc.2 baseline) | Previously validated native suites and desktop source/account/selection                                                               |
 | macOS Desktop 0.2.1-rc.2 / 0.2.1-rc.1            | Native and real desktop validation pending for these releases; 0.2.0-rc.2 native suites passed                                        |
 | macOS Desktop 0.2.1-rc.3                         | 0.3.7 source/settings/coverage UI confirmed; 0.3.8 real interaction failed; 0.3.9 native checks pass, real-account acceptance pending |
+| macOS Desktop 0.2.2-rc.1                         | 0.3.10 source/package and all four native suites pass; GUI/real-account acceptance pending                                            |
 | Windows/macOS/Linux Node CI                      | Protocol/package tests only; not proof of desktop login or inference                                                                  |
 | Older DSH, remote/headless Hosts, Linux Desktop  | Not currently claimed supported                                                                                                       |
 
@@ -60,7 +61,7 @@ For a clean/archive installation only. If the package is already linked to a che
 
 ```sh
 npm run pack
-npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.9.tgz
+npm run dsh -- plugin --profile desktop add ./artifacts/pyh-pan-dsh-openai-oauth-0.3.10.tgz
 ```
 
 Do not keep the old private bundle and this bundle enabled simultaneously: they deliberately preserve the same provider/credential identity. See [migration](docs/migration.md).
